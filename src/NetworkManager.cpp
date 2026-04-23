@@ -131,9 +131,19 @@ void NetworkManager::handleNotFound(WiFiClient& client) {
 }
 
 void NetworkManager::discardHeaders(WiFiClient& client) {
-  char line[64];
+  // Scan byte-by-byte for \r\n\r\n (end of HTTP request headers).
+  // A fixed-size buffer approach breaks when a header line length is a
+  // multiple of the buffer size; byte-by-byte is safer and still fast enough.
+  uint8_t prev = 0;
+  uint8_t crlf = 0;
   while (client.connected()) {
-    const int n = client.readBytesUntil('\n', line, sizeof(line));
-    if (n == 0 || (n == 1 && line[0] == '\r')) break;
+    const int ch = client.read();
+    if (ch < 0) break;
+    if (ch == '\n' && prev == '\r') {
+      if (++crlf == 2) break;  // found \r\n\r\n
+    } else if (ch != '\r') {
+      crlf = 0;  // non-blank content resets the counter
+    }
+    prev = static_cast<uint8_t>(ch);
   }
 }
