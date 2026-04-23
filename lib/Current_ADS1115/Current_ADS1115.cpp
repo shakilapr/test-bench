@@ -1,7 +1,5 @@
 #include "Current_ADS1115.h"
 
-#include "Config.h"
-
 #include <limits.h>
 
 CurrentADS1115::CurrentADS1115()
@@ -10,12 +8,12 @@ CurrentADS1115::CurrentADS1115()
       raw_counts_(0),
       saturated_(false) {}
 
-bool CurrentADS1115::begin(TwoWire& wire) {
-  if (!ads_.begin(Config::kAds1115Address, &wire)) {
+bool CurrentADS1115::begin(TwoWire& wire, uint8_t address) {
+  if (!ads_.begin(address, &wire)) {
     return false;
   }
 
-  ads_.setGain(Config::kAdsGain);
+  ads_.setGain(GAIN_SIXTEEN);
   ads_.setDataRate(RATE_ADS1115_128SPS);
   return true;
 }
@@ -26,7 +24,7 @@ bool CurrentADS1115::update() {
 
   shunt_millivolts_ = ads_.computeVolts(raw_counts_) * 1000.0f;
   current_amps_ =
-      (shunt_millivolts_ / Config::kShuntMaxMilliVolts) * Config::kShuntMaxAmps;
+      (shunt_millivolts_ / kShuntMaxMilliVolts) * kShuntMaxAmps;
   return true;
 }
 

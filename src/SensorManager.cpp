@@ -16,7 +16,7 @@ SensorManager::SensorManager()
     : current_sensor_(), sample_(), temp_handle_(nullptr), temp_started_(false) {}
 
 bool SensorManager::begin(TwoWire& wire) {
-  sample_.ads_ok = current_sensor_.begin(wire);
+  sample_.ads_ok = current_sensor_.begin(wire, Config::kAds1115Address);
   sample_.temp_ok = beginChipTemperature();
   return sample_.ads_ok || sample_.temp_ok;
 }

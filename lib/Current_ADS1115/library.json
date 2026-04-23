@@ -1,0 +1,7 @@
+{
+  "name": "Current_ADS1115",
+  "version": "1.0.0",
+  "description": "ADS1115 differential current sensing via shunt resistor",
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"]
+}

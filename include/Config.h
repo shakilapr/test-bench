@@ -1,7 +1,6 @@
 #pragma once
 
-#include <Arduino.h>
-#include <Adafruit_ADS1X15.h>
+#include <stdint.h>
 
 namespace Config {
 
@@ -9,10 +8,8 @@ constexpr uint8_t kI2cSdaPin = 8;
 constexpr uint8_t kI2cSclPin = 9;
 constexpr uint8_t kAds1115Address = 0x48;
 
-constexpr float kShuntMaxAmps = 200.0f;
-constexpr float kShuntMaxMilliVolts = 75.0f;
-
-constexpr adsGain_t kAdsGain = GAIN_SIXTEEN;
+// Gain: GAIN_SIXTEEN (±0.256 V) suits the 75 mV full-scale shunt.
+// Rate: 128 SPS default. Both are set inside Current_ADS1115::begin().
 constexpr uint16_t kTelemetryIntervalMs = 500;
 
 constexpr const char* kApSsid = "Telemetry";

@@ -7,7 +7,8 @@ class CurrentADS1115 {
  public:
   CurrentADS1115();
 
-  bool begin(TwoWire& wire);
+  // address: I2C address of the ADS1115 (default 0x48).
+  bool begin(TwoWire& wire, uint8_t address = 0x48);
   bool update();
 
   float currentAmps() const;
@@ -16,6 +17,9 @@ class CurrentADS1115 {
   bool saturated() const;
 
  private:
+  static constexpr float kShuntMaxAmps = 200.0f;
+  static constexpr float kShuntMaxMilliVolts = 75.0f;
+
   Adafruit_ADS1115 ads_;
   float current_amps_;
   float shunt_millivolts_;

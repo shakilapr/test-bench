@@ -36,9 +36,11 @@ void setup() {
 }
 
 void loop() {
+  network_manager.loop();
+
   const unsigned long now = millis();
   if (now - last_publish_ms < Config::kTelemetryIntervalMs) {
-    delay(10);
+    yield();
     return;
   }
 

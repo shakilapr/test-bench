@@ -11,7 +11,7 @@ The system uses:
 - a `200 A / 75 mV` shunt as the current sensor,
 - the ESP32-S3 built-in temperature sensor for chip temperature telemetry,
 - a PROGMEM-hosted HTML/JS UI,
-- Server-Sent Events for server-to-browser telemetry.
+- Server-Sent Events for server-to-browser telemetry using Arduino core `WiFiServer`.
 
 The architecture is intentionally optimized for one-way telemetry. It does not assume browser-to-device commands.
 
@@ -50,7 +50,7 @@ Reasoning:
 - SSE matches one-way telemetry directly.
 - Browsers reconnect `EventSource` streams automatically.
 - The server code is smaller than a WebSocket implementation.
-- There is no WebSocket cleanup loop to maintain.
+- The build avoids external async web server packages.
 - Serving the UI from firmware removes filesystem mount and deployment complexity.
 
 This decision should be revisited only if the project later needs:
@@ -68,7 +68,7 @@ This decision should be revisited only if the project later needs:
 - ADC: `ADS1115`
 - current sensor: `200 A / 75 mV` shunt
 - chip temperature source: ESP32-S3 built-in temperature sensor
-- network transport: Wi-Fi + HTTP/SSE
+- network transport: Wi-Fi + HTTP/SSE using Arduino core `WiFiServer`
 
 ### I2C wiring assumptions
 
@@ -161,6 +161,7 @@ Before implementation is treated as final, confirm:
 - register SSE endpoint `/events`
 - publish telemetry events
 - optionally register an mDNS hostname
+- use built-in Arduino `WiFiServer` and `WiFiClient`, not `ESPAsyncWebServer`
 
 `src/web_ui.h`
 
@@ -197,7 +198,7 @@ Notes:
 ## Data Flow
 
 ```text
-Shunt -> ADS1115 -> Current_ADS1115 -> SensorManager -> AsyncEventSource -> Browser UI
+Shunt -> ADS1115 -> Current_ADS1115 -> SensorManager -> WiFiServer SSE stream -> Browser UI
 ```
 
 Detailed flow:
@@ -250,7 +251,13 @@ Transport rules:
 - include current as `c` and chip temperature as `t`,
 - do not include voltage until a voltage path exists,
 - malformed payloads must be ignored safely by the browser,
-- reconnect handling should rely on `EventSource` behavior.
+- reconnect handling should rely on `EventSource` behavior,
+- support one connected browser stream for the first build.
+
+Implementation rule:
+
+- use Arduino core `WiFiServer` and `WiFiClient` for SSE,
+- do not add `ESPAsyncWebServer` unless later requirements justify the extra package.
 
 ### Browser behavior
 
@@ -346,12 +353,11 @@ Integration requirement:
 `platformio.ini` should pin:
 
 - the `espressif32` platform version,
-- the maintained `ESP32Async/ESPAsyncWebServer` release,
 - `Adafruit_ADS1X15`.
 
 Reason:
 
-- platform changes can alter Arduino core behavior and async networking behavior.
+- platform changes can alter Arduino core behavior and temperature sensor APIs.
 
 Recommended shape:
 
@@ -363,7 +369,6 @@ framework = arduino
 monitor_speed = 115200
 
 lib_deps =
-    ESP32Async/ESPAsyncWebServer @ <tested-version>
     adafruit/Adafruit_ADS1X15 @ ^2.4.0
 ```
 
