@@ -1,7 +1,5 @@
 #include "SensorManager.h"
 
-#include <math.h>
-
 #include "Config.h"
 
 #if __has_include(<driver/temperature_sensor.h>)

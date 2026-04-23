@@ -1,7 +1,6 @@
 #include "NetworkManager.h"
 
 #include <ESPmDNS.h>
-#include <pgmspace.h>
 
 #include "Config.h"
 #include "web_ui.h"
@@ -49,7 +48,7 @@ void NetworkManager::publishTelemetry(const TelemetrySample& sample) {
     return;
   }
 
-  char payload[128];
+  char payload[64];
   const int written = snprintf(payload, sizeof(payload),
                                "{\"c\":%.2f,\"t\":%.2f,\"sat\":%s}",
                                sample.current_amps, sample.chip_temp_c,
@@ -66,17 +65,20 @@ void NetworkManager::publishTelemetry(const TelemetrySample& sample) {
 void NetworkManager::handleClient(WiFiClient client) {
   client.setTimeout(1000);
 
-  const String request_line = client.readStringUntil('\r');
-  client.read();
+  char req[64] = {};
+  const int reqlen = client.readBytesUntil('\n', req, sizeof(req) - 1);
+  if (reqlen > 0 && req[reqlen - 1] == '\r') {
+    req[reqlen - 1] = '\0';
+  }
   discardHeaders(client);
 
-  if (request_line.startsWith("GET /events ")) {
+  if (strncmp(req, "GET /events ", 12) == 0) {
     handleEvents(client);
     return;
   }
 
-  if (request_line.startsWith("GET / ") ||
-      request_line.startsWith("GET /index.html ")) {
+  if (strncmp(req, "GET / ", 6) == 0 ||
+      strncmp(req, "GET /index.html ", 16) == 0) {
     handleRoot(client);
     return;
   }
@@ -85,15 +87,15 @@ void NetworkManager::handleClient(WiFiClient client) {
 }
 
 void NetworkManager::handleRoot(WiFiClient& client) {
-  const size_t content_length = strlen_P(INDEX_HTML);
+  constexpr size_t kLen = sizeof(INDEX_HTML) - 1;
   client.println("HTTP/1.1 200 OK");
-  client.println("Content-Type: text/html; charset=utf-8");
+  client.println("Content-Type: text/html");
   client.println("Cache-Control: no-cache");
   client.println("Connection: close");
   client.print("Content-Length: ");
-  client.println(content_length);
+  client.println(kLen);
   client.println();
-  client.write(reinterpret_cast<const uint8_t*>(INDEX_HTML), content_length);
+  client.write(reinterpret_cast<const uint8_t*>(INDEX_HTML), kLen);
   client.flush();
   client.stop();
 }
@@ -129,10 +131,9 @@ void NetworkManager::handleNotFound(WiFiClient& client) {
 }
 
 void NetworkManager::discardHeaders(WiFiClient& client) {
+  char line[64];
   while (client.connected()) {
-    const String line = client.readStringUntil('\n');
-    if (line == "\r" || line.length() == 0) {
-      break;
-    }
+    const int n = client.readBytesUntil('\n', line, sizeof(line));
+    if (n == 0 || (n == 1 && line[0] == '\r')) break;
   }
 }
