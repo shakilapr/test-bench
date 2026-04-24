@@ -287,6 +287,7 @@ Compatibility note:
 
 - Apple platforms generally support `.local` discovery out of the box,
 - Windows support is not universal and may depend on Bonjour or another mDNS resolver being installed.
+- on Windows, the AP IP address such as `http://192.168.4.1` should be treated as the default access path.
 
 ## I2C Ownership Rule
 
@@ -369,7 +370,7 @@ framework = arduino
 monitor_speed = 115200
 
 lib_deps =
-    adafruit/Adafruit_ADS1X15 @ ^2.4.0
+    adafruit/Adafruit ADS1X15 @ ^2.4.0
 ```
 
 If extra libraries are introduced later, they must also be pinned.
@@ -399,6 +400,24 @@ Default deployment sequence:
 3. Verify boot logs.
 4. Open `/` in a browser.
 5. Confirm the SSE stream updates the UI.
+
+### Windows workflow
+
+Use Windows serial ports directly instead of Linux device paths.
+
+Example commands:
+
+```powershell
+platformio run
+platformio run -t upload --upload-port COM5
+platformio device monitor --port COM5 --baud 115200
+```
+
+Notes:
+
+- replace `COM5` with the actual ESP32 port shown by Device Manager,
+- if `platformio` is not on `PATH`, run it from the PlatformIO terminal or install the CLI,
+- prefer the printed AP IP address over `bench.local` on Windows unless Bonjour is installed.
 
 Effects of the PROGMEM decision:
 

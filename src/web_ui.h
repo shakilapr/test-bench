@@ -34,7 +34,7 @@ const char INDEX_HTML[] PROGMEM =
 "ev.addEventListener('telemetry',function(e){"
 "var d;try{d=JSON.parse(e.data)}catch(_){return}"
 "c.textContent=typeof d.c=='number'?d.c.toFixed(2)+' A':'--';"
-"t.textContent=typeof d.t=='number'?d.t.toFixed(1)+'\xb0C':'--';"
+"t.textContent=typeof d.t=='number'?d.t.toFixed(1)+'\xB0'+'C':'--';"
 "m.textContent=d.sat?'ADC sat':'OK'"
 "});ev.onerror=function(){ss('Reconnecting...',0)}"
 "</script></body></html>";

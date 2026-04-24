@@ -14,14 +14,18 @@ bool NetworkManager::begin() {
     return false;
   }
 
+  const IPAddress ap_ip = WiFi.softAPIP();
   Serial.print("AP IP address: ");
-  Serial.println(WiFi.softAPIP());
+  Serial.println(ap_ip);
+  Serial.print("Open UI at: http://");
+  Serial.println(ap_ip);
 
   if (Config::kEnableMdns) {
     if (MDNS.begin(Config::kMdnsHostname)) {
       Serial.print("mDNS ready: http://");
       Serial.print(Config::kMdnsHostname);
       Serial.println(".local");
+      Serial.println("Windows may require Bonjour for .local resolution");
     } else {
       Serial.println("mDNS start failed; use the AP IP address instead");
     }

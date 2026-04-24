@@ -19,6 +19,7 @@ void setup() {
 
   Serial.println();
   Serial.println("ESP32 telemetry boot");
+  Serial.println("Windows tip: use the AP IP shown below if .local does not resolve");
 
   Wire.begin(Config::kI2cSdaPin, Config::kI2cSclPin);
 
