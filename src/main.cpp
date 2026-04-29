@@ -2,50 +2,63 @@
 #include <Wire.h>
 
 #include "Config.h"
+#include "CommandRouter.h"
+#include "DeviceState.h"
 #include "NetworkManager.h"
+#include "Provision.h"
 #include "SensorManager.h"
+#include "TelemetryPublisher.h"
 
 namespace {
 
+Provision provision;
+DeviceState device_state;
 SensorManager sensor_manager;
 NetworkManager network_manager;
+TelemetryPublisher* publisher = nullptr;
+CommandRouter* router = nullptr;
 unsigned long last_publish_ms = 0;
+bool meta_published = false;
 
 }  // namespace
 
 void setup() {
   Serial.begin(115200);
-  delay(500);
-
-  Serial.println();
-  Serial.println("ESP32 telemetry boot");
-  Serial.println("Windows tip: use the AP IP shown below if .local does not resolve");
+  delay(300);
+  Serial.println("\nESP32 telemetry boot");
 
   Wire.begin(Config::kI2cSdaPin, Config::kI2cSclPin);
+  if (!sensor_manager.begin(Wire)) Serial.println("sensors: degraded");
 
-  if (!sensor_manager.begin(Wire)) {
-    Serial.println("Warning: no sensors initialized successfully");
-  } else {
-    Serial.println("Sensor manager initialized");
+  if (!provision.load()) {
+    Serial.println("NVS not provisioned. Set device_id/wifi_ssid/wifi_pass/mqtt_url via serial provisioning tool.");
+    return;
+  }
+  device_state.initialize();
+  if (!network_manager.begin(provision)) {
+    Serial.println("network: bad config"); return;
   }
 
-  if (!network_manager.begin()) {
-    Serial.println("Network manager failed to start");
-  } else {
-    Serial.println("Network manager initialized");
-  }
+  static TelemetryPublisher pub(network_manager, device_state, sensor_manager);
+  static CommandRouter rt(network_manager, device_state);
+  publisher = &pub;
+  router = &rt;
+  router->begin();
 }
 
 void loop() {
   network_manager.loop();
-
-  const unsigned long now = millis();
-  if (now - last_publish_ms < Config::kTelemetryIntervalMs) {
-    yield();
-    return;
+  if (!network_manager.connected()) { delay(50); return; }
+  if (!meta_published) {
+    publisher->publishMetadata(/*metadata_version=*/1);
+    meta_published = true;
   }
 
-  sensor_manager.update();
-  network_manager.publishTelemetry(sensor_manager.sample());
+  unsigned long now = millis();
+  if (now - last_publish_ms < device_state.sampleIntervalMs()) {
+    delay(5);
+    return;
+  }
   last_publish_ms = now;
+  publisher->publishOnce();
 }

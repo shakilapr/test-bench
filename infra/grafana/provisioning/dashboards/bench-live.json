@@ -1,0 +1,46 @@
+{
+  "uid": "bench-live",
+  "title": "Bench Live",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-15m", "to": "now" },
+  "refresh": "5s",
+  "templating": {
+    "list": [
+      {
+        "name": "device_id",
+        "type": "textbox",
+        "label": "Device",
+        "current": { "value": "bench-01", "text": "bench-01" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Current (A)",
+      "datasource": { "type": "influxdb", "uid": "" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"bench\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"bench_sample\" and r.device_id == \"${device_id}\" and r._field == \"current_a\")"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Chip Temperature (\u00b0C)",
+      "datasource": { "type": "influxdb", "uid": "" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"bench\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"bench_sample\" and r.device_id == \"${device_id}\" and r._field == \"chip_temp_c\")"
+        }
+      ]
+    }
+  ]
+}

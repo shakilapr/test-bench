@@ -1,0 +1,14 @@
+{
+  "name": "bench-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "tsx e2e.ts"
+  },
+  "devDependencies": {
+    "aedes": "^0.51.3",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4"
+  }
+}

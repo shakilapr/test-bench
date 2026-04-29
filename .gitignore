@@ -34,3 +34,21 @@ Thumbs.db
 
 # Local agent/session files
 .codex
+
+# Node / web
+node_modules/
+**/dist/
+**/.vite/
+coverage/
+playwright-report/
+test-results/
+*.heapsnapshot
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Testcontainers / docker volumes
+.testcontainers/
+infra/data/

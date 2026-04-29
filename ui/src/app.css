@@ -1,0 +1,41 @@
+:root {
+  font-family: system-ui, sans-serif;
+  --bg: #111418;
+  --fg: #e6e9ef;
+  --panel: #1a1f26;
+  --accent: #4ea1ff;
+  --ok: #4ec96b;
+  --warn: #e6b34a;
+  --err: #ee5e5e;
+  background: var(--bg);
+  color: var(--fg);
+}
+body { margin: 0; padding: 0; }
+button {
+  font: inherit;
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid #333;
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+input, select {
+  font: inherit;
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid #333;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+}
+.card {
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 1rem;
+  margin: 0.5rem 0;
+}
+.status-online { color: var(--ok); }
+.status-offline { color: var(--err); }
+.status-unknown { color: var(--warn); }

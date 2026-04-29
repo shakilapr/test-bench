@@ -1,153 +1,120 @@
 #include "NetworkManager.h"
 
+#include <Arduino.h>
 #include <ESPmDNS.h>
 
 #include "Config.h"
-#include "web_ui.h"
+#include "Provision.h"
 
-NetworkManager::NetworkManager()
-    : server_(80), event_client_(), event_client_connected_(false) {}
+namespace {
+NetworkManager* g_self = nullptr;
 
-bool NetworkManager::begin() {
-  if (!WiFi.softAP(Config::kApSsid, Config::kApPassword)) {
-    Serial.println("Failed to start Wi-Fi access point");
-    return false;
+bool parseMqttUrl(const String& url, String& host_out, uint16_t& port_out) {
+  String s = url;
+  int scheme = s.indexOf("://");
+  if (scheme >= 0) s = s.substring(scheme + 3);
+  int colon = s.indexOf(':');
+  if (colon < 0) {
+    host_out = s; port_out = 1883; return host_out.length() > 0;
   }
+  host_out = s.substring(0, colon);
+  port_out = (uint16_t)s.substring(colon + 1).toInt();
+  if (port_out == 0) port_out = 1883;
+  return host_out.length() > 0;
+}
+}
 
-  const IPAddress ap_ip = WiFi.softAPIP();
-  Serial.print("AP IP address: ");
-  Serial.println(ap_ip);
-  Serial.print("Open UI at: http://");
-  Serial.println(ap_ip);
+bool NetworkManager::begin(const Provision& prov) {
+  g_self = this;
+  device_id_ = prov.deviceId();
+  wifi_ssid_ = prov.wifiSsid();
+  wifi_pass_ = prov.wifiPass();
+  mqtt_user_ = prov.mqttUser();
+  mqtt_pass_ = prov.mqttPass();
+  if (!parseMqttUrl(prov.mqttUrl(), mqtt_host_, mqtt_port_)) return false;
+  client_id_ = String("bench-") + device_id_;
+  buildTopics();
 
-  if (Config::kEnableMdns) {
-    if (MDNS.begin(Config::kMdnsHostname)) {
-      Serial.print("mDNS ready: http://");
-      Serial.print(Config::kMdnsHostname);
-      Serial.println(".local");
-      Serial.println("Windows may require Bonjour for .local resolution");
-    } else {
-      Serial.println("mDNS start failed; use the AP IP address instead");
-    }
-  }
+  WiFi.mode(WIFI_STA);
+  WiFi.setHostname(client_id_.c_str());
+  WiFi.begin(wifi_ssid_.c_str(), wifi_pass_.c_str());
 
-  server_.begin();
+  mqtt_.setServer(mqtt_host_.c_str(), mqtt_port_);
+  mqtt_.setBufferSize(1024);
+  mqtt_.setKeepAlive(15);
+  mqtt_.setSocketTimeout(5);
+  mqtt_.setCallback(&NetworkManager::staticOnMessage);
+
+  if (Config::kEnableMdns) MDNS.begin(Config::kMdnsHostname);
   return true;
 }
 
+void NetworkManager::buildTopics() {
+  topic_telemetry_ = "bench/" + device_id_ + "/telemetry";
+  topic_status_    = "bench/" + device_id_ + "/status";
+  topic_meta_      = "bench/" + device_id_ + "/meta";
+  topic_ack_       = "bench/" + device_id_ + "/ack";
+  topic_cmd_       = "bench/" + device_id_ + "/cmd";
+}
+
 void NetworkManager::loop() {
-  WiFiClient client = server_.available();
-  if (client) {
-    handleClient(client);
-  }
-
-  if (event_client_connected_ && !event_client_.connected()) {
-    event_client_.stop();
-    event_client_connected_ = false;
-  }
+  ensureWifi();
+  ensureMqtt();
+  if (mqtt_.connected()) mqtt_.loop();
 }
 
-void NetworkManager::publishTelemetry(const TelemetrySample& sample) {
-  if (!event_client_connected_ || !event_client_.connected()) {
-    return;
-  }
-
-  char payload[64];
-  const int written = snprintf(payload, sizeof(payload),
-                               "{\"c\":%.2f,\"t\":%.2f,\"sat\":%s}",
-                               sample.current_amps, sample.chip_temp_c,
-                               sample.ads_saturated ? "true" : "false");
-  if (written > 0) {
-    event_client_.print("event: telemetry\n");
-    event_client_.print("data: ");
-    event_client_.print(payload);
-    event_client_.print("\n\n");
-    event_client_.flush();
-  }
+bool NetworkManager::ensureWifi() {
+  if (WiFi.status() == WL_CONNECTED) return true;
+  unsigned long now = millis();
+  if (now < next_reconnect_ms_) return false;
+  next_reconnect_ms_ = now + 2000;
+  WiFi.reconnect();
+  return false;
 }
 
-void NetworkManager::handleClient(WiFiClient client) {
-  client.setTimeout(1000);
+bool NetworkManager::ensureMqtt() {
+  if (mqtt_.connected()) return true;
+  if (WiFi.status() != WL_CONNECTED) return false;
+  unsigned long now = millis();
+  if (now < next_reconnect_ms_) return false;
+  next_reconnect_ms_ = now + 2000;
 
-  char req[64] = {};
-  const int reqlen = client.readBytesUntil('\n', req, sizeof(req) - 1);
-  if (reqlen > 0 && req[reqlen - 1] == '\r') {
-    req[reqlen - 1] = '\0';
-  }
-  discardHeaders(client);
+  String lwt = String("{\"v\":1,\"device_id\":\"") + device_id_ + "\",\"online\":false}";
 
-  if (strncmp(req, "GET /events ", 12) == 0) {
-    handleEvents(client);
-    return;
-  }
+  bool ok = mqtt_.connect(client_id_.c_str(),
+                          mqtt_user_.length() ? mqtt_user_.c_str() : nullptr,
+                          mqtt_pass_.length() ? mqtt_pass_.c_str() : nullptr,
+                          topic_status_.c_str(), 1, true, lwt.c_str());
+  if (!ok) return false;
 
-  if (strncmp(req, "GET / ", 6) == 0 ||
-      strncmp(req, "GET /index.html ", 16) == 0) {
-    handleRoot(client);
-    return;
-  }
-
-  handleNotFound(client);
+  publishOnlineStatus();
+  mqtt_.subscribe(topic_cmd_.c_str(), 1);
+  return true;
 }
 
-void NetworkManager::handleRoot(WiFiClient& client) {
-  constexpr size_t kLen = sizeof(INDEX_HTML) - 1;
-  client.println("HTTP/1.1 200 OK");
-  client.println("Content-Type: text/html");
-  client.println("Cache-Control: no-cache");
-  client.println("Connection: close");
-  client.print("Content-Length: ");
-  client.println(kLen);
-  client.println();
-  client.write(reinterpret_cast<const uint8_t*>(INDEX_HTML), kLen);
-  client.flush();
-  client.stop();
+void NetworkManager::publishOnlineStatus() {
+  String s = String("{\"v\":1,\"device_id\":\"") + device_id_ + "\",\"online\":true}";
+  mqtt_.publish(topic_status_.c_str(), (const uint8_t*)s.c_str(), s.length(), true);
 }
 
-void NetworkManager::handleEvents(WiFiClient& client) {
-  if (event_client_connected_) {
-    event_client_.stop();
-    event_client_connected_ = false;
-  }
-
-  // HTTP headers use CRLF (println); SSE event lines use LF only.
-  client.println("HTTP/1.1 200 OK");
-  client.println("Content-Type: text/event-stream");
-  client.println("Cache-Control: no-cache");
-  client.println("Connection: keep-alive");
-  client.println("Access-Control-Allow-Origin: *");
-  client.println();
-  client.print("event: status\ndata: connected\n\n");
-  client.flush();
-
-  event_client_ = client;
-  event_client_connected_ = true;
+bool NetworkManager::publishTelemetry(const char* json, size_t len) {
+  if (!mqtt_.connected()) return false;
+  return mqtt_.publish(topic_telemetry_.c_str(), (const uint8_t*)json, len, false);
+}
+bool NetworkManager::publishStatus(const char* json, size_t len, bool retained) {
+  if (!mqtt_.connected()) return false;
+  return mqtt_.publish(topic_status_.c_str(), (const uint8_t*)json, len, retained);
+}
+bool NetworkManager::publishMeta(const char* json, size_t len) {
+  if (!mqtt_.connected()) return false;
+  return mqtt_.publish(topic_meta_.c_str(), (const uint8_t*)json, len, true);
+}
+bool NetworkManager::publishAck(const char* json, size_t len) {
+  if (!mqtt_.connected()) return false;
+  return mqtt_.publish(topic_ack_.c_str(), (const uint8_t*)json, len, false);
 }
 
-void NetworkManager::handleNotFound(WiFiClient& client) {
-  client.println("HTTP/1.1 404 Not Found");
-  client.println("Content-Type: text/plain");
-  client.println("Connection: close");
-  client.println();
-  client.println("Not found");
-  client.flush();
-  client.stop();
-}
-
-void NetworkManager::discardHeaders(WiFiClient& client) {
-  // Scan byte-by-byte for \r\n\r\n (end of HTTP request headers).
-  // A fixed-size buffer approach breaks when a header line length is a
-  // multiple of the buffer size; byte-by-byte is safer and still fast enough.
-  uint8_t prev = 0;
-  uint8_t crlf = 0;
-  while (client.connected()) {
-    const int ch = client.read();
-    if (ch < 0) break;
-    if (ch == '\n' && prev == '\r') {
-      if (++crlf == 2) break;  // found \r\n\r\n
-    } else if (ch != '\r') {
-      crlf = 0;  // non-blank content resets the counter
-    }
-    prev = static_cast<uint8_t>(ch);
-  }
+void NetworkManager::staticOnMessage(char* topic, uint8_t* payload, unsigned int len) {
+  if (!g_self || !g_self->handler_) return;
+  g_self->handler_(topic, payload, len);
 }
