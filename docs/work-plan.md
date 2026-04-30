@@ -363,7 +363,7 @@ the firmware.
 
 ### Steps
 
-1. **`tools/simulator/`** Node script (`sim.ts`):
+1. **`simulator/`** Node script (`sim.ts`):
    - Connects to MQTT with LWT `bench/{device_id}/status` retained `offline`.
    - On connect, publishes retained `status` `online` and retained `meta` per
      `architecture.md` §Metadata.
@@ -386,7 +386,7 @@ the firmware.
    - From the UI, send `set_sample_interval=200`: simulator acks, telemetry
      cadence visibly speeds up.
    - Start a recording, wait 10 s, stop, hit CSV export, confirm rows.
-4. **Automated smoke** (`tools/simulator/test/e2e.test.ts`): boots compose +
+4. **Automated smoke** (`simulator/test/e2e.test.ts`): boots compose +
    backend + sim in CI for 60 s, then asserts:
    - InfluxDB has > 60 `bench_sample` points for `bench-sim-01`.
    - SQLite recording row exists for the started/stopped session.
@@ -397,10 +397,10 @@ the firmware.
 
 | File | Test |
 | --- | --- |
-| `tools/simulator/sim.test.ts` | telemetry payload matches Zod schema shared with backend; quality codes are integers |
-| `tools/simulator/sim.test.ts` | `--fault saturated` flips `current_a_quality` to `1` |
-| `tools/simulator/sim.test.ts` | dedupe: same `cmd_id` twice → second ack is `duplicate` |
-| `tools/simulator/test/e2e.test.ts` | full stack: 60 s run produces points + recording + command round-trip |
+| `simulator/sim.test.ts` | telemetry payload matches Zod schema shared with backend; quality codes are integers |
+| `simulator/sim.test.ts` | `--fault saturated` flips `current_a_quality` to `1` |
+| `simulator/sim.test.ts` | dedupe: same `cmd_id` twice → second ack is `duplicate` |
+| `simulator/test/e2e.test.ts` | full stack: 60 s run produces points + recording + command round-trip |
 
 ### Done when
 

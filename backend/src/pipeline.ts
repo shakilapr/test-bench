@@ -1,14 +1,14 @@
 import type { EventBus } from "./bus.js";
 import type { DeviceRepo } from "./db/devices.js";
 import type { RecordingRepo } from "./db/recordings.js";
-import type { InfluxWriter } from "./influx/writer.js";
+import type { IInfluxWriter } from "./influx/noop.js";
 import type { Telemetry, Status, Metadata } from "./protocol.js";
 
 export interface PipelineOptions {
   bus: EventBus;
   devices: DeviceRepo;
   recordings: RecordingRepo;
-  influx: InfluxWriter;
+  influx: IInfluxWriter;
 }
 
 // Wires MQTT-side device events into the SQLite control plane and InfluxDB write path.

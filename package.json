@@ -1,0 +1,32 @@
+{
+  "name": "bench-telemetry",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ESP32 bench telemetry: firmware, backend, UI, simulator.",
+  "workspaces": [
+    "backend",
+    "ui",
+    "simulator",
+    "e2e",
+    "chaos"
+  ],
+  "scripts": {
+    "dev": "concurrently -n be,sim,ui -c blue,green,magenta \"npm:dev:backend\" \"npm:dev:sim\" \"npm:dev:ui\"",
+    "dev:backend": "cross-env NODE_ENV=development EMBED_BROKER=true INFLUX_DISABLED=true PORT=3000 npm --workspace backend run dev",
+    "dev:sim": "wait-on tcp:1883 && npm --workspace simulator run sim",
+    "dev:ui": "npm --workspace ui run dev",
+    "build:ui": "npm --workspace ui run build",
+    "build:backend": "npm --workspace backend run build",
+    "build": "npm run build:ui && npm run build:backend",
+    "start": "cross-env NODE_ENV=production EMBED_BROKER=true INFLUX_DISABLED=true npm --workspace backend run start",
+    "test": "npm --workspace backend test && npm --workspace ui test && npm --workspace simulator test",
+    "test:e2e": "npm --workspace e2e run e2e",
+    "test:firmware": "pio test -e native --project-dir firmware",
+    "build:firmware": "pio run --project-dir firmware"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "cross-env": "^7.0.3",
+    "wait-on": "^8.0.1"
+  }
+}

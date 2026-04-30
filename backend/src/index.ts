@@ -10,6 +10,8 @@ import { DeviceRepo } from "./db/devices.js";
 import { RecordingRepo } from "./db/recordings.js";
 import { CommandRepo } from "./db/commands.js";
 import { InfluxWriter } from "./influx/writer.js";
+import { NoopInfluxWriter, type IInfluxWriter } from "./influx/noop.js";
+import { startEmbeddedBroker, type EmbeddedBroker } from "./mqtt/embedded.js";
 import { MqttBroker } from "./mqtt/broker.js";
 import { Dispatcher } from "./commands/dispatcher.js";
 import { wirePipeline } from "./pipeline.js";
@@ -23,11 +25,23 @@ async function main() {
   const devices = new DeviceRepo(db);
   const recordings = new RecordingRepo(db);
   const commands = new CommandRepo(db);
-  const influx = new InfluxWriter({
-    url: cfg.INFLUX_URL, token: cfg.INFLUX_TOKEN, org: cfg.INFLUX_ORG, bucket: cfg.INFLUX_BUCKET,
-  });
+  const influx: IInfluxWriter = cfg.INFLUX_DISABLED
+    ? new NoopInfluxWriter()
+    : new InfluxWriter({
+        url: cfg.INFLUX_URL, token: cfg.INFLUX_TOKEN, org: cfg.INFLUX_ORG, bucket: cfg.INFLUX_BUCKET,
+      });
+  if (cfg.INFLUX_DISABLED) console.log("[influx] disabled (INFLUX_DISABLED=true)");
+
+  let embedded: EmbeddedBroker | null = null;
+  if (cfg.EMBED_BROKER) {
+    embedded = await startEmbeddedBroker(cfg.EMBED_BROKER_PORT);
+  }
   const broker = new MqttBroker(
-    { url: cfg.MQTT_URL, user: cfg.MQTT_USER, pass: cfg.MQTT_PASS },
+    {
+      url: cfg.EMBED_BROKER ? `mqtt://127.0.0.1:${cfg.EMBED_BROKER_PORT}` : cfg.MQTT_URL,
+      user: cfg.MQTT_USER,
+      pass: cfg.MQTT_PASS,
+    },
     bus
   );
   const dispatcher = new Dispatcher(broker, commands, bus);
@@ -58,6 +72,7 @@ async function main() {
     await app.close();
     await broker.stop();
     await influx.close();
+    if (embedded) await embedded.stop();
     db.close();
     process.exit(0);
   };

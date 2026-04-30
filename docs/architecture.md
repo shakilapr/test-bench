@@ -111,19 +111,21 @@ SvelteKit is not used. The project has a dedicated backend; collapsing them into
 
 ## Codebase Layout
 
-The repository root is a PlatformIO project (firmware). Backend and UI live in subdirectories alongside it.
+The repository is an npm workspace. Each top-level folder is independently
+runnable. Firmware lives in its own subdirectory so it does not crowd the
+root namespace.
 
 ```text
 bench-telemetry/
-  src/                  firmware source (PlatformIO)
-  include/              firmware headers
-  lib/                  firmware libraries
-  platformio.ini
+  firmware/             PlatformIO project (src/, include/, lib/, test/, platformio.ini)
   backend/              Node.js TypeScript server
   ui/                   Svelte + Vite frontend
-  docs/
-    architecture.md
-    wiring.md
+  simulator/            hardware-less device simulator
+  e2e/                  in-process broker + backend + sim, hits HTTP
+  chaos/                resilience checks against a live stack
+  infra/                optional Docker compose (Mosquitto, InfluxDB, Grafana)
+  docs/                 architecture.md, wiring.md, work-plan.md, runbook.md
+  package.json          npm workspaces; `npm run dev` boots the no-Docker stack
   README.md
 ```
 

@@ -1,29 +1,36 @@
 # Bench Runbook
 
-## Bring up the stack (dev)
+## Bring up the stack (no Docker, recommended for development)
 
 ```powershell
-docker compose -f infra/docker-compose.dev.yml up -d
-cd backend; npm install; npm run dev
-# in another shell
-cd ui; npm install; npm run dev
+npm install
+npm run dev
 ```
 
-Open <http://localhost:5173>. Vite proxies `/api` and `/ws` to the backend on
-port 3000.
+Backend embeds an MQTT broker (`EMBED_BROKER=true`) and skips Influx writes
+(`INFLUX_DISABLED=true`). Open <http://localhost:5173>. Vite proxies `/api`
+and `/ws` to the backend on port 3000. The simulator publishes as
+`bench-sim-01`.
 
-## Bring up the stack (prod-like, single port)
+To run the production binary the same way (single port, no Docker):
 
 ```powershell
-docker compose -f infra/docker-compose.dev.yml up -d
-cd ui; npm run build
-cd ../backend; npm run build
-node dist\index.js
+npm run build
+npm start
 ```
 
 Open <http://localhost:3000>.
 
-## Verify MQTT
+## Bring up the stack (Docker, full Influx + Grafana)
+
+```powershell
+docker compose -f infra/docker-compose.dev.yml up -d
+npm --workspace backend run dev
+npm --workspace simulator run sim
+npm --workspace ui run dev
+```
+
+## Verify MQTT (Docker path only)
 
 ```powershell
 docker exec -it bench-mosquitto mosquitto_sub -t "bench/#" -v
@@ -37,10 +44,10 @@ docker compose -f infra/docker-compose.dev.yml down
 
 ## Run the chaos harness
 
-After the full stack + simulator is up:
+After the full Docker stack + simulator is up:
 
 ```powershell
-cd tools\chaos; npm install; npm run chaos
+cd chaos; npm run chaos
 ```
 
 It restarts Mosquitto, then asserts the device returns online and a

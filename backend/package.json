@@ -16,6 +16,7 @@
     "@fastify/static": "^7.0.4",
     "@fastify/websocket": "^10.0.1",
     "@influxdata/influxdb-client": "^1.35.0",
+    "aedes": "^0.51.3",
     "better-sqlite3": "^11.1.2",
     "fastify": "^4.28.1",
     "mqtt": "^5.10.0",

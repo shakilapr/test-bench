@@ -6,9 +6,21 @@ hardware. It implements the same MQTT protocol described in `architecture.md`.
 
 ## Run
 
+No-Docker (recommended for development):
+
 ```powershell
-docker compose -f ..\..\infra\docker-compose.dev.yml up -d
-cd tools\simulator
+# from the repo root, after `npm install`:
+npm run dev
+```
+
+This starts the backend (with an in-process MQTT broker and a no-op Influx
+writer), the simulator, and the UI dev server in one shell.
+
+To run only the simulator against an existing broker:
+
+```powershell
+docker compose -f ..\infra\docker-compose.dev.yml up -d
+cd simulator
 npm install
 npm run sim
 ```

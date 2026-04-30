@@ -13,6 +13,15 @@ const Schema = z.object({
   INFLUX_BUCKET: z.string().default("bench"),
   GRAFANA_URL: z.string().default("http://localhost:3001"),
   UI_DIST: z.string().default("../ui/dist"),
+  EMBED_BROKER: z
+    .union([z.boolean(), z.string()])
+    .default(false)
+    .transform((v) => v === true || v === "true" || v === "1"),
+  EMBED_BROKER_PORT: z.coerce.number().default(1883),
+  INFLUX_DISABLED: z
+    .union([z.boolean(), z.string()])
+    .default(false)
+    .transform((v) => v === true || v === "true" || v === "1"),
 });
 
 export type Config = z.infer<typeof Schema>;

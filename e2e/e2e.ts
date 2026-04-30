@@ -22,9 +22,9 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { createServer, AddressInfo } from "node:net";
 import Aedes from "aedes";
 
-const REPO = resolve(import.meta.dirname, "..", "..");
+const REPO = resolve(import.meta.dirname, "..");
 const BACKEND_DIR = join(REPO, "backend");
-const SIM_DIR = join(REPO, "tools", "simulator");
+const SIM_DIR = join(REPO, "simulator");
 const DEVICE_ID = "bench-sim-01";
 
 interface Spawned { proc: ChildProcess; name: string; }
@@ -100,7 +100,7 @@ async function main() {
   const broker = await startBroker(mqttPort);
 
   const tsxBin = process.platform === "win32" ? "tsx.cmd" : "tsx";
-  const backend = track(spawn(join(BACKEND_DIR, "node_modules", ".bin", tsxBin), ["src/index.ts"], {
+  const backend = track(spawn("npx", ["--no-install", "tsx", "src/index.ts"], {
     cwd: BACKEND_DIR,
     shell: true,
     env: {
@@ -112,6 +112,7 @@ async function main() {
       SQLITE_PATH: sqlitePath,
     },
   }), "backend");
+  void tsxBin;
 
   await waitForBackend();
   console.log("[e2e] backend healthy");

@@ -1,5 +1,6 @@
 import { InfluxDB, Point, WriteApi } from "@influxdata/influxdb-client";
 import type { Telemetry } from "../protocol.js";
+import type { IInfluxWriter } from "./noop.js";
 
 export interface InfluxConfig {
   url: string;
@@ -8,7 +9,7 @@ export interface InfluxConfig {
   bucket: string;
 }
 
-export class InfluxWriter {
+export class InfluxWriter implements IInfluxWriter {
   private writeApi: WriteApi;
 
   constructor(cfg: InfluxConfig) {
