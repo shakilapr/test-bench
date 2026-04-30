@@ -16,13 +16,20 @@ import {
   CommandPayload,
 } from "./src/protocol.js";
 
+type CurrentFault = "none" | "saturated";
+type MotorFault = "none" | "stall" | "sensor";
+
 interface Options {
   deviceId: string;
   mqttUrl: string;
   intervalMs: number;
-  fault: "none" | "saturated";
+  fault: CurrentFault;
   dropAfterSec: number | null;
   dropForSec: number;
+  motorTargetRpm: number | null;
+  motorTauMs: number;
+  motorMaxRpm: number;
+  motorFault: MotorFault;
 }
 
 function parseOptions(): Options {
@@ -35,16 +42,44 @@ function parseOptions(): Options {
       fault: { type: "string", default: "none" },
       "drop-after": { type: "string" },
       "drop-for": { type: "string", default: "20" },
+      "motor-target-rpm": { type: "string" },
+      "motor-tau-ms": { type: "string", default: "1500" },
+      "motor-max-rpm": { type: "string", default: "6000" },
+      "motor-fault": { type: "string", default: "none" },
     },
   });
+  const motorFault = ((): MotorFault => {
+    const v = String(values["motor-fault"] ?? "none");
+    return v === "stall" || v === "sensor" ? v : "none";
+  })();
   return {
     deviceId: String(values["device-id"]),
     mqttUrl: String(values["mqtt-url"]),
     intervalMs: Number(values["interval-ms"]),
-    fault: (values.fault === "saturated" ? "saturated" : "none") as Options["fault"],
+    fault: (values.fault === "saturated" ? "saturated" : "none") as CurrentFault,
     dropAfterSec: values["drop-after"] ? Number(values["drop-after"]) : null,
     dropForSec: Number(values["drop-for"]),
+    motorTargetRpm: values["motor-target-rpm"] != null
+      ? Number(values["motor-target-rpm"])
+      : null,
+    motorTauMs: Number(values["motor-tau-ms"]),
+    motorMaxRpm: Number(values["motor-max-rpm"]),
+    motorFault,
   };
+}
+
+// Default duty profile: idle → spool-up → cruise → boost → wind-down, looping.
+// Returns the *target* RPM for time t (seconds since start). The simulator
+// applies a first-order lag toward this target, so the chart shows a
+// physically plausible response (no instant jumps).
+function defaultMotorProfile(t: number, maxRpm: number): number {
+  const period = 60; // seconds for one full cycle
+  const phase = t % period;
+  if (phase < 5) return 0;                              // idle
+  if (phase < 20) return 0.5 * maxRpm;                  // cruise low
+  if (phase < 35) return 0.8 * maxRpm;                  // cruise high
+  if (phase < 45) return 0.95 * maxRpm;                 // boost
+  return 0.2 * maxRpm;                                  // wind-down
 }
 
 class Simulator {
@@ -56,6 +91,8 @@ class Simulator {
   private client: MqttClient | null = null;
   private recentCmdIds = new Map<string, number>();
   private readonly options: Options;
+  private motorRpm = 0;          // current rotor speed (state of the lag model)
+  private lastTickMs = Date.now();
 
   constructor(options: Options) {
     this.options = options;
@@ -109,11 +146,44 @@ class Simulator {
 
   private publishTelemetry() {
     if (!this.client?.connected) return;
-    const t = (Date.now() - this.startedAt) / 1000;
-    const currentA = 12 + 2 * Math.sin(t * 0.5) + (Math.random() - 0.5) * 0.1;
-    const chipTempC = 41 + Math.sin(t * 0.05) * 0.5 + (Math.random() - 0.5) * 0.05;
-    // Synthetic motor: nominal 3000 rpm with slow modulation + jitter.
-    const motorRpm = 3000 + 400 * Math.sin(t * 0.2) + (Math.random() - 0.5) * 30;
+    const now = Date.now();
+    const t = (now - this.startedAt) / 1000;
+    const dtMs = Math.max(1, now - this.lastTickMs);
+    this.lastTickMs = now;
+
+    // ---- Motor model: first-order lag toward a target RPM ----
+    // tau is the time constant — physically this is rotor inertia / damping.
+    // alpha = 1 - exp(-dt/tau) is the discrete-time blend factor; smaller tau
+    // => snappier response, larger tau => sluggish ramp.
+    const target = this.options.motorTargetRpm != null
+      ? this.options.motorTargetRpm
+      : defaultMotorProfile(t, this.options.motorMaxRpm);
+    const tau = Math.max(50, this.options.motorTauMs);
+    const alpha = 1 - Math.exp(-dtMs / tau);
+    this.motorRpm += (target - this.motorRpm) * alpha;
+    // Mechanical jitter ~ 0.3% of speed, plus a tiny absolute floor for noise.
+    const rpmNoise = (Math.random() - 0.5) * (Math.abs(this.motorRpm) * 0.006 + 4);
+    let motorRpm = Math.max(0, this.motorRpm + rpmNoise);
+    let motorQ = 0;
+    if (this.options.motorFault === "stall") {
+      motorRpm = 0;
+      this.motorRpm = 0;
+    } else if (this.options.motorFault === "sensor") {
+      motorQ = 1; // value still emitted, but flagged as sensor fault
+    }
+
+    // ---- Current: motor load + ambient oscillation + jitter ----
+    // Real motors draw current roughly proportional to speed (no-load) plus a
+    // load term — model that as a linear + small quadratic component so the
+    // chart visibly tracks RPM changes.
+    const loadAmps = (motorRpm / 1000) * 1.8 + Math.pow(motorRpm / 1000, 2) * 0.05;
+    const ambient = 1.5 * Math.sin(t * 0.5);
+    const currentA = 2.0 + loadAmps + ambient + (Math.random() - 0.5) * 0.1;
+
+    // ---- Chip temp: drifts up with current draw, slow thermal mass ----
+    const chipTempC = 38 + (currentA - 2) * 0.25 + Math.sin(t * 0.05) * 0.5
+      + (Math.random() - 0.5) * 0.05;
+
     const saturated = this.options.fault === "saturated";
 
     this.seq += 1;
@@ -121,9 +191,9 @@ class Simulator {
       deviceId: this.options.deviceId,
       bootId: this.bootId,
       seq: this.seq,
-      ms: Date.now() - this.startedAt,
+      ms: now - this.startedAt,
       readings: { current_a: currentA, chip_temp_c: chipTempC, motor_rpm: motorRpm },
-      quality: { current_a: saturated ? 1 : 0, chip_temp_c: 0, motor_rpm: 0 },
+      quality: { current_a: saturated ? 1 : 0, chip_temp_c: 0, motor_rpm: motorQ },
     });
     this.client.publish(
       `bench/${this.options.deviceId}/telemetry`,

@@ -158,6 +158,27 @@ The `motor_rpm` channel flows through the same telemetry path as
 everything else (no special transport), and the UI shows it on a
 dedicated **Motor** tab.
 
+### Trying it without hardware
+
+`npm run dev` starts backend + simulator + UI together. The simulator
+models the motor as a **first-order lag**: rotor speed ramps toward a
+target with a time constant (rotor inertia / damping), instead of
+snapping to the new value. The default duty profile cycles through
+idle → cruise → boost → wind-down so the **Motor** tab shows realistic
+spool-up and coast-down curves. `current_a` is coupled to RPM (more
+speed = more load = more current), so the live and motor tabs move
+together.
+
+Useful flags for `npm --workspace simulator run sim --`:
+
+| Flag | What it does |
+| --- | --- |
+| `--motor-target-rpm 4500` | Hold a constant target instead of the duty cycle. |
+| `--motor-tau-ms 500` | Make the motor snappier (small) or sluggish (large). |
+| `--motor-max-rpm 8000` | Top of the default duty profile. |
+| `--motor-fault stall` | Force RPM to zero (mechanical stall). |
+| `--motor-fault sensor` | Emit RPM but flag quality = 1 (Hall sensor fault). |
+
 ## Setup, in three commands
 
 ```powershell
