@@ -16,6 +16,12 @@ export interface Reading {
   quality: Record<string, number>;
 }
 
+export interface Sample {
+  ts: number;
+  readings: Record<string, number>;
+  quality: Record<string, number>;
+}
+
 export interface RecordingRow {
   recording_id: string;
   device_id: string;
@@ -25,12 +31,12 @@ export interface RecordingRow {
   sample_count?: number;
 }
 
-export const SPARK_WINDOW = 120;
+// Keep ~2 minutes of samples client-side for the live charts (240 @ 500ms).
+export const SAMPLE_WINDOW = 240;
 
 export const devices = writable<DeviceDto[]>([]);
 export const liveReadings = writable<Record<string, Reading>>({});
-// Per-device, per-channel ring of recent values for sparklines.
-export const recentReadings = writable<Record<string, Record<string, number[]>>>({});
+export const recentSamples = writable<Record<string, Sample[]>>({});
 export const wsConnected = writable(false);
 export const recordings = writable<Record<string, RecordingRow[]>>({});
 export const activeRecording = writable<Record<string, RecordingRow | null>>({});
@@ -56,6 +62,12 @@ export async function refreshRecordings(deviceId: string) {
   activeRecording.update((m) => ({ ...m, [deviceId]: act }));
 }
 
+export async function deleteRecording(recordingId: string, deviceId: string) {
+  const r = await fetch(`/api/recordings/${recordingId}`, { method: "DELETE" });
+  if (r.ok) await refreshRecordings(deviceId);
+  return r.ok;
+}
+
 export function applyTelemetry(t: any) {
   const ts = Date.now();
   liveReadings.update((cur) => {
@@ -67,15 +79,11 @@ export function applyTelemetry(t: any) {
     };
     return cur;
   });
-  recentReadings.update((cur) => {
-    const d = cur[t.device_id] ?? {};
-    for (const [k, v] of Object.entries(t.readings ?? {})) {
-      const arr = d[k] ?? [];
-      arr.push(v as number);
-      if (arr.length > SPARK_WINDOW) arr.splice(0, arr.length - SPARK_WINDOW);
-      d[k] = arr;
-    }
-    cur[t.device_id] = d;
+  recentSamples.update((cur) => {
+    const arr = cur[t.device_id] ?? [];
+    arr.push({ ts, readings: t.readings ?? {}, quality: t.quality ?? {} });
+    if (arr.length > SAMPLE_WINDOW) arr.splice(0, arr.length - SAMPLE_WINDOW);
+    cur[t.device_id] = arr;
     return cur;
   });
 }

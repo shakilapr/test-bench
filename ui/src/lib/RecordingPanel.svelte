@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { DeviceDto } from "./stores.js";
-  import { recordings, activeRecording, refreshRecordings } from "./stores.js";
+  import { recordings, activeRecording, refreshRecordings, deleteRecording } from "./stores.js";
 
   export let device: DeviceDto;
   let label = "";
@@ -76,14 +76,20 @@
             <td>{new Date(h.started_at).toLocaleTimeString()}</td>
             <td>{fmtDuration(h.started_at, h.ended_at)}</td>
             <td>{h.sample_count ?? 0}</td>
-            <td>
+            <td class="actions">
               {#if h.ended_at}
                 <a
                   class="export-btn"
                   href="/api/recordings/{h.recording_id}/export.csv"
                   download
                   data-testid="export-csv-{h.recording_id}"
-                >Export CSV</a>
+                >CSV</a>
+                <button
+                  class="del-btn"
+                  on:click={() => deleteRecording(h.recording_id, device.device_id)}
+                  data-testid="delete-rec-{h.recording_id}"
+                  title="Delete recording"
+                >✕</button>
               {:else}
                 <span class="muted">live</span>
               {/if}
@@ -110,5 +116,11 @@
     border: 1px solid #2a3a4f; border-radius: 4px; font-size: 0.8rem;
   }
   .export-btn:hover { border-color: var(--accent); background: #182230; }
+  .actions { display: flex; gap: 0.35rem; align-items: center; }
+  .del-btn {
+    background: transparent; border: 1px solid #3a2a2a; color: #c47a7a;
+    padding: 0.15rem 0.4rem; font-size: 0.75rem; border-radius: 4px; cursor: pointer;
+  }
+  .del-btn:hover { border-color: var(--err); color: var(--err); background: #2a1818; }
   .muted { color: #888; }
 </style>

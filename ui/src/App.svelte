@@ -6,7 +6,7 @@
   } from "./lib/stores.js";
   import { WsClient } from "./lib/ws.js";
   import DeviceList from "./lib/DeviceList.svelte";
-  import LiveCard from "./lib/LiveCard.svelte";
+  import LivePanel from "./lib/LivePanel.svelte";
   import CommandPanel from "./lib/CommandPanel.svelte";
   import RecordingPanel from "./lib/RecordingPanel.svelte";
 
@@ -57,7 +57,7 @@
   <header class="topbar">
     {#if dev}
       <div class="cur">
-        <span class="cur-label">Selected</span>
+        <span class="cur-label">Device</span>
         <strong data-testid="current-device">{dev.device_id}</strong>
         <span class="status-{dev.last_status}">● {dev.last_status}</span>
       </div>
@@ -67,11 +67,11 @@
             ● REC <code>{active.recording_id.slice(0, 10)}…</code>
           </span>
           <button class="danger" on:click={quickStop} disabled={busy} data-testid="header-stop">
-            ■ Stop recording
+            ■ Stop
           </button>
         {:else}
           <button class="primary" on:click={quickStart} disabled={busy} data-testid="header-start">
-            ● Start recording
+            ● Record
           </button>
         {/if}
       </div>
@@ -82,7 +82,7 @@
 
   <main class="main">
     {#if dev}
-      <LiveCard device={dev} reading={$liveReadings[dev.device_id]} />
+      <LivePanel device={dev} reading={$liveReadings[dev.device_id]} />
       <div class="row">
         <CommandPanel device={dev} />
         <RecordingPanel device={dev} />
@@ -96,16 +96,18 @@
 <style>
   .app {
     display: grid;
-    grid-template-columns: 240px 1fr;
-    grid-template-rows: 56px 1fr;
+    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-rows: 56px minmax(0, 1fr);
     grid-template-areas: "sidebar topbar" "sidebar main";
     height: 100vh;
+    min-width: 0;
   }
   .sidebar {
     grid-area: sidebar;
     background: #0e1217;
     border-right: 1px solid #222;
     overflow-y: auto;
+    min-width: 0;
   }
   .brand {
     display: flex; justify-content: space-between; align-items: center;
@@ -119,11 +121,12 @@
     display: flex; justify-content: space-between; align-items: center;
     padding: 0 1rem; border-bottom: 1px solid #222; background: #0e1217;
     gap: 1rem;
+    min-width: 0;
   }
-  .cur { display: flex; align-items: center; gap: 0.75rem; }
-  .cur-label { color: #9aa4b1; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
-  .cur strong { font-family: ui-monospace, monospace; }
-  .actions { display: flex; align-items: center; gap: 0.75rem; }
+  .cur { display: flex; align-items: center; gap: 0.75rem; min-width: 0; flex-shrink: 1; overflow: hidden; }
+  .cur strong { font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; }
+  .cur-label { color: #9aa4b1; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0; }
+  .actions { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
   .rec-badge {
     color: var(--err); font-size: 0.85rem; font-weight: 600;
     animation: pulse 1.4s ease-in-out infinite;
@@ -136,13 +139,15 @@
     overflow-y: auto;
     padding: 1rem;
     display: flex; flex-direction: column; gap: 1rem;
+    min-width: 0;
   }
   .main .row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
     gap: 1rem;
+    align-items: start;
   }
-  @media (max-width: 900px) {
+  @media (max-width: 980px) {
     .app { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; grid-template-areas: "sidebar" "topbar" "main"; height: auto; }
     .sidebar { max-height: 30vh; }
     .main .row { grid-template-columns: 1fr; }

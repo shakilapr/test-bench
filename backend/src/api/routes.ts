@@ -37,12 +37,32 @@ export async function registerRoutes(app: FastifyInstance, deps: ApiDeps) {
     const id = (req.params as { id: string }).id;
     const active = deps.recordings.activeFor(id);
     if (!active) return reply.code(409).send({ error: "no active recording" });
-    return deps.recordings.stop(active.recording_id);
+    const stopped = deps.recordings.stop(active.recording_id);
+    const dev = deps.devices.get(id);
+    const meta = dev?.metadata_json ? JSON.parse(dev.metadata_json) : null;
+    const channelKeys = ((meta?.channels ?? []) as Array<{ key: string; recordable?: boolean }>)
+      .filter((c) => c.recordable !== false)
+      .map((c) => c.key);
+    deps.recordings.persistSamples(stopped.recording_id, channelKeys, deps.buffer.samples(stopped.recording_id));
+    return stopped;
+  });
+
+  app.delete("/api/recordings/:rid", async (req, reply) => {
+    const rid = (req.params as { rid: string }).rid;
+    const row = deps.recordings.get(rid);
+    if (!row) return reply.code(404).send({ error: "not found" });
+    if (!row.ended_at) return reply.code(409).send({ error: "stop the recording first" });
+    deps.buffer.drop(rid);
+    deps.recordings.delete(rid);
+    return { ok: true };
   });
 
   app.get("/api/devices/:id/recordings", async (req) => {
     const id = (req.params as { id: string }).id;
-    return deps.recordings.list(id).map((r) => ({ ...r, sample_count: deps.buffer.size(r.recording_id) }));
+    return deps.recordings.list(id).map((r) => ({
+      ...r,
+      sample_count: deps.buffer.size(r.recording_id) || deps.recordings.sampleCount(r.recording_id),
+    }));
   });
 
   app.get("/api/recordings/:rid/export.csv", async (req, reply) => {
@@ -51,8 +71,22 @@ export async function registerRoutes(app: FastifyInstance, deps: ApiDeps) {
     if (!row) return reply.code(404).send({ error: "not found" });
     const dev = deps.devices.get(row.device_id);
     const meta = dev?.metadata_json ? JSON.parse(dev.metadata_json) : null;
-    const channels = (meta?.channels ?? []).filter((c: any) => c.recordable !== false);
-    const csv = toCsv(channels, deps.buffer.samples(rid));
+    const metaChannels = ((meta?.channels ?? []) as Array<{ key: string; unit: string; recordable?: boolean }>)
+      .filter((c) => c.recordable !== false);
+
+    let samples = deps.buffer.samples(rid);
+    let channels = metaChannels;
+    if (samples.length === 0) {
+      const persisted = deps.recordings.loadSamples(rid);
+      if (persisted) {
+        samples = persisted.samples;
+        // Use persisted column order, fall back to metadata for units.
+        const unitByKey = new Map(metaChannels.map((c) => [c.key, c.unit]));
+        channels = persisted.channels.map((k) => ({ key: k, unit: unitByKey.get(k) ?? "" }));
+      }
+    }
+
+    const csv = toCsv(channels, samples);
     const fname = `${rid}${row.label ? `_${row.label.replace(/[^A-Za-z0-9._-]+/g, "_")}` : ""}.csv`;
     reply.header("content-type", "text/csv; charset=utf-8");
     reply.header("content-disposition", `attachment; filename="${fname}"`);

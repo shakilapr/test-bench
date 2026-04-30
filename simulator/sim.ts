@@ -1,8 +1,7 @@
 // Bench ESP32 simulator.
 //
 // Speaks the same MQTT protocol as the firmware target so the full pipeline
-// (Mosquitto -> backend -> InfluxDB -> Grafana -> UI) can be exercised without
-// hardware. See architecture.md for protocol details.
+// (broker -> backend -> UI) can be exercised without hardware.
 
 import { randomUUID } from "node:crypto";
 import { parseArgs } from "node:util";

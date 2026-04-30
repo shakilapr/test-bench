@@ -34,6 +34,14 @@ function migrate(db: DB) {
       FOREIGN KEY (device_id) REFERENCES devices(device_id)
     );
 
+    CREATE TABLE IF NOT EXISTS recording_samples (
+      recording_id TEXT PRIMARY KEY,
+      sample_count INTEGER NOT NULL,
+      channels_json TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      FOREIGN KEY (recording_id) REFERENCES recordings(recording_id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS commands (
       cmd_id TEXT PRIMARY KEY,
       device_id TEXT NOT NULL,

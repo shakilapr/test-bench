@@ -1,25 +1,23 @@
 # Bench Simulator
 
 A Node script that pretends to be an ESP32 bench node so the rest of the stack
-(Mosquitto, backend, InfluxDB, Grafana, UI) can be tested end-to-end without
-hardware. It implements the same MQTT protocol described in `architecture.md`.
+(backend, UI) can be tested end-to-end without hardware. It speaks the same
+MQTT protocol as the firmware target.
 
 ## Run
 
-No-Docker (recommended for development):
+From the repo root, after `npm install`:
 
 ```powershell
-# from the repo root, after `npm install`:
 npm run dev
 ```
 
-This starts the backend (with an in-process MQTT broker and a no-op Influx
-writer), the simulator, and the UI dev server in one shell.
+This starts the backend (with the embedded MQTT broker), the simulator, and
+the UI dev server in one shell.
 
 To run only the simulator against an existing broker:
 
 ```powershell
-docker compose -f ..\infra\docker-compose.dev.yml up -d
 cd simulator
 npm install
 npm run sim
@@ -40,20 +38,11 @@ npm run sim -- --fault saturated
 npm run sim -- --drop-after 30 --drop-for 20
 ```
 
-## Verify in the broker
-
-```powershell
-docker exec -it bench-mosquitto mosquitto_sub -t "bench/#" -v
-```
-
-Expect: retained `meta`, retained `online` status, telemetry every interval.
-On Ctrl+C, retained status flips to `offline`.
-
 ## Tests
 
 ```powershell
 npm test
 ```
 
-Unit tests cover payload shapes and command parsing. End-to-end tests against
-the full stack live in Phase 6 (`work-plan.md`).
+Unit tests cover payload shapes and command parsing.
+

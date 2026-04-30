@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { DB } from "./sqlite.js";
+import type { RecordingSample } from "../recordings/buffer.js";
 
 export interface RecordingRow {
   recording_id: string;
@@ -7,6 +8,11 @@ export interface RecordingRow {
   label: string | null;
   started_at: number;
   ended_at: number | null;
+}
+
+export interface PersistedSamples {
+  channels: string[];
+  samples: RecordingSample[];
 }
 
 export class RecordingRepo {
@@ -45,5 +51,54 @@ export class RecordingRepo {
       return this.db.prepare(`SELECT * FROM recordings WHERE device_id = ? ORDER BY started_at DESC`).all(deviceId) as RecordingRow[];
     }
     return this.db.prepare(`SELECT * FROM recordings ORDER BY started_at DESC`).all() as RecordingRow[];
+  }
+
+  delete(recordingId: string) {
+    this.db.prepare(`DELETE FROM recording_samples WHERE recording_id = ?`).run(recordingId);
+    this.db.prepare(`DELETE FROM recordings WHERE recording_id = ?`).run(recordingId);
+  }
+
+  // Drop any recording rows that are stale at startup: still flagged active but
+  // their in-memory buffer is gone, or finished but never persisted samples.
+  // Both are unrecoverable so don't show them to the user.
+  pruneOrphans(): number {
+    const active = this.db
+      .prepare(`DELETE FROM recordings WHERE ended_at IS NULL`)
+      .run().changes;
+    const empty = this.db
+      .prepare(
+        `DELETE FROM recordings
+           WHERE ended_at IS NOT NULL
+             AND recording_id NOT IN (SELECT recording_id FROM recording_samples)`
+      )
+      .run().changes;
+    return active + empty;
+  }
+
+  persistSamples(recordingId: string, channelKeys: string[], samples: RecordingSample[]) {
+    this.db
+      .prepare(
+        `INSERT OR REPLACE INTO recording_samples (recording_id, sample_count, channels_json, payload)
+         VALUES (?, ?, ?, ?)`
+      )
+      .run(recordingId, samples.length, JSON.stringify(channelKeys), JSON.stringify(samples));
+  }
+
+  loadSamples(recordingId: string): PersistedSamples | undefined {
+    const row = this.db
+      .prepare(`SELECT channels_json, payload FROM recording_samples WHERE recording_id = ?`)
+      .get(recordingId) as { channels_json: string; payload: string } | undefined;
+    if (!row) return undefined;
+    return {
+      channels: JSON.parse(row.channels_json) as string[],
+      samples: JSON.parse(row.payload) as RecordingSample[],
+    };
+  }
+
+  sampleCount(recordingId: string): number {
+    const row = this.db
+      .prepare(`SELECT sample_count FROM recording_samples WHERE recording_id = ?`)
+      .get(recordingId) as { sample_count: number } | undefined;
+    return row?.sample_count ?? 0;
   }
 }

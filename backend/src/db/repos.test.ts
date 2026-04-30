@@ -58,6 +58,48 @@ describe("RecordingRepo", () => {
     rec.stop(r.recording_id, 200);
     expect(() => rec.stop(r.recording_id, 300)).toThrow();
   });
+
+  it("persistSamples + loadSamples round-trips", () => {
+    const r = rec.start("d1", null, 100);
+    rec.stop(r.recording_id, 200);
+    rec.persistSamples(r.recording_id, ["a", "b"], [
+      { ts: 1, readings: { a: 1, b: 2 }, quality: { a: 0, b: 0 } },
+      { ts: 2, readings: { a: 3, b: 4 }, quality: { a: 0, b: 0 } },
+    ]);
+    expect(rec.sampleCount(r.recording_id)).toBe(2);
+    const loaded = rec.loadSamples(r.recording_id);
+    expect(loaded?.channels).toEqual(["a", "b"]);
+    expect(loaded?.samples.length).toBe(2);
+    expect(loaded?.samples[1].readings.a).toBe(3);
+  });
+
+  it("delete removes recording and its samples", () => {
+    const r = rec.start("d1", null, 100);
+    rec.stop(r.recording_id, 200);
+    rec.persistSamples(r.recording_id, ["a"], [{ ts: 1, readings: { a: 1 }, quality: {} }]);
+    rec.delete(r.recording_id);
+    expect(rec.get(r.recording_id)).toBeUndefined();
+    expect(rec.loadSamples(r.recording_id)).toBeUndefined();
+  });
+
+  it("pruneOrphans drops active rows and finished-but-empty rows, keeps persisted", () => {
+    dev.upsertSeen("d2", 0);
+    dev.upsertSeen("d3", 0);
+    // d1: active (no ended_at) → drop
+    rec.start("d1", null, 100);
+    // d2: finished, no samples persisted → drop
+    const empty = rec.start("d2", null, 200);
+    rec.stop(empty.recording_id, 250);
+    // d3: finished WITH samples → keep
+    const kept = rec.start("d3", null, 300);
+    rec.stop(kept.recording_id, 400);
+    rec.persistSamples(kept.recording_id, ["a"], [{ ts: 1, readings: { a: 1 }, quality: {} }]);
+
+    const dropped = rec.pruneOrphans();
+    expect(dropped).toBe(2);
+    expect(rec.get(kept.recording_id)).toBeDefined();
+    expect(rec.get(empty.recording_id)).toBeUndefined();
+  });
 });
 
 describe("CommandRepo", () => {

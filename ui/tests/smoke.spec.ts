@@ -9,7 +9,7 @@ const DEVICE = "bench-sim-01";
 async function waitForLive(page: Page) {
   await expect(page.getByTestId("ws-status")).toContainText("live");
   await expect(page.getByTestId(`device-row-${DEVICE}`)).toBeVisible();
-  await expect(page.getByTestId(`live-card-${DEVICE}`)).toBeVisible();
+  await expect(page.getByTestId(`live-panel-${DEVICE}`)).toBeVisible();
 }
 
 test.describe("Bench UI — live pipeline", () => {
@@ -27,10 +27,24 @@ test.describe("Bench UI — live pipeline", () => {
     await expect(temp).toBeVisible();
 
     // Capture a value, wait for sim to publish another sample, expect it to update.
+    // The tile shows "<num> <unit>"; just compare the entire text.
     const before = (await current.innerText()).trim();
     await expect
       .poll(async () => (await current.innerText()).trim(), { timeout: 10_000 })
       .not.toBe(before);
+  });
+
+  test("chart tabs switch between current and chip temp", async ({ page }) => {
+    await page.goto("/");
+    await waitForLive(page);
+
+    // Default tab: current_a chart visible.
+    await expect(page.getByTestId("chart-current_a")).toBeVisible();
+
+    // Click the chip temp tab; chart for chip_temp_c should appear.
+    await page.getByTestId("tab-chip_temp_c").click();
+    await expect(page.getByTestId("chart-chip_temp_c")).toBeVisible();
+    await expect(page.getByTestId("tab-chip_temp_c")).toHaveAttribute("aria-selected", "true");
   });
 
   test("sends a command and gets back a cmd id", async ({ page }) => {
@@ -64,7 +78,7 @@ test.describe("Bench UI — live pipeline", () => {
     expect(Number(samples)).toBeGreaterThan(0);
 
     // Export CSV link → fetch it through the page context (carries cookies, baseURL).
-    const exportLink = firstRow.getByRole("link", { name: "Export CSV" });
+    const exportLink = firstRow.getByRole("link", { name: "CSV" });
     const href = await exportLink.getAttribute("href");
     expect(href).toMatch(/^\/api\/recordings\/.+\/export\.csv$/);
 

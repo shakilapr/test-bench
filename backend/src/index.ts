@@ -25,6 +25,8 @@ async function main() {
   const recordings = new RecordingRepo(db);
   const commands = new CommandRepo(db);
   const buffer = new RecordingBuffer();
+  const pruned = recordings.pruneOrphans();
+  if (pruned > 0) console.log(`[backend] pruned ${pruned} orphan recording row(s)`);
 
   let embedded: EmbeddedBroker | null = null;
   if (cfg.EMBED_BROKER) {

@@ -106,4 +106,55 @@ describe("REST API", () => {
     const r = await ctx.app.inject({ method: "GET", url: "/api/devices/d1/recordings" });
     expect(r.json()[0].sample_count).toBe(2);
   });
+
+  it("stop persists buffer to SQLite so CSV survives buffer drop", async () => {
+    ctx.devices.upsertSeen("d1");
+    ctx.devices.applyMetadata({
+      v: 1, device_id: "d1", metadata_version: 1, quality_codes: {}, commands: [],
+      channels: [
+        { key: "current_a", label: "Current", unit: "A", kind: "gauge", recordable: true, chartable: true },
+        { key: "chip_temp_c", label: "Temp", unit: "degC", kind: "gauge", recordable: true, chartable: true },
+      ],
+    } as any);
+    const start = await ctx.app.inject({ method: "POST", url: "/api/devices/d1/recordings/start", payload: {} });
+    const rid = start.json().recording_id;
+    ctx.buffer.append(rid, { v: 1, device_id: "d1", boot_id: "b", seq: 0, ms: 0, readings: { current_a: 2.5, chip_temp_c: 41 }, quality: {}, time_synced: false } as any, 1700000000000);
+    await ctx.app.inject({ method: "POST", url: "/api/devices/d1/recordings/stop" });
+
+    // Simulate a backend restart wiping the in-memory buffer.
+    ctx.buffer.drop(rid);
+    expect(ctx.buffer.size(rid)).toBe(0);
+    expect(ctx.recordings.sampleCount(rid)).toBe(1);
+
+    const r = await ctx.app.inject({ method: "GET", url: `/api/recordings/${rid}/export.csv` });
+    expect(r.statusCode).toBe(200);
+    const lines = r.body.trim().split("\n");
+    expect(lines[0]).toBe("ts_ms,iso,current_a,chip_temp_c,current_a_q,chip_temp_c_q");
+    expect(lines[1]).toContain("2.5,41");
+  });
+
+  it("DELETE /api/recordings/:rid removes a stopped recording", async () => {
+    ctx.devices.upsertSeen("d1");
+    const start = await ctx.app.inject({ method: "POST", url: "/api/devices/d1/recordings/start", payload: {} });
+    const rid = start.json().recording_id;
+    await ctx.app.inject({ method: "POST", url: "/api/devices/d1/recordings/stop" });
+
+    const r = await ctx.app.inject({ method: "DELETE", url: `/api/recordings/${rid}` });
+    expect(r.statusCode).toBe(200);
+    expect(ctx.recordings.get(rid)).toBeUndefined();
+  });
+
+  it("DELETE refuses an active recording with 409", async () => {
+    ctx.devices.upsertSeen("d1");
+    const start = await ctx.app.inject({ method: "POST", url: "/api/devices/d1/recordings/start", payload: {} });
+    const rid = start.json().recording_id;
+    const r = await ctx.app.inject({ method: "DELETE", url: `/api/recordings/${rid}` });
+    expect(r.statusCode).toBe(409);
+    expect(ctx.recordings.get(rid)).toBeDefined();
+  });
+
+  it("DELETE 404s an unknown recording", async () => {
+    const r = await ctx.app.inject({ method: "DELETE", url: "/api/recordings/nope" });
+    expect(r.statusCode).toBe(404);
+  });
 });
