@@ -112,6 +112,8 @@ class Simulator {
     const t = (Date.now() - this.startedAt) / 1000;
     const currentA = 12 + 2 * Math.sin(t * 0.5) + (Math.random() - 0.5) * 0.1;
     const chipTempC = 41 + Math.sin(t * 0.05) * 0.5 + (Math.random() - 0.5) * 0.05;
+    // Synthetic motor: nominal 3000 rpm with slow modulation + jitter.
+    const motorRpm = 3000 + 400 * Math.sin(t * 0.2) + (Math.random() - 0.5) * 30;
     const saturated = this.options.fault === "saturated";
 
     this.seq += 1;
@@ -120,8 +122,8 @@ class Simulator {
       bootId: this.bootId,
       seq: this.seq,
       ms: Date.now() - this.startedAt,
-      readings: { current_a: currentA, chip_temp_c: chipTempC },
-      quality: { current_a: saturated ? 1 : 0, chip_temp_c: 0 },
+      readings: { current_a: currentA, chip_temp_c: chipTempC, motor_rpm: motorRpm },
+      quality: { current_a: saturated ? 1 : 0, chip_temp_c: 0, motor_rpm: 0 },
     });
     this.client.publish(
       `bench/${this.options.deviceId}/telemetry`,

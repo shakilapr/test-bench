@@ -14,6 +14,15 @@ Board: ESP32-S3-DevKitC-1. Schematic: https://documentation.espressif.com/esp-de
 | — | `A1` | Shunt low-side sense |
 | — | `ADDR` (floating or → `GND`) | Both yield `0x48`. ADDR has an internal pull-down on the ADS1115 module, so a floating pin is fine. |
 
+### Hall sensor (motor speed)
+
+| ESP32-S3 pin | Hall sensor pin | Notes |
+| --- | --- | --- |
+| `GND` | Sensor / motor controller `GND` | **Mandatory common ground** — the 3.3 V pulse is meaningless without a shared reference. |
+| `GPIO33` | Pulse output (level-shifted to 3.3 V) | `Config::kHallPulsePin`. Routed to the PCNT peripheral, counts rising edges only with a 1 µs hardware glitch filter. |
+
+`GPIO33` is chosen because it is a normal IO pin (no boot-strap role like `GPIO0/2/5/12/15`), it has internal pull-up/pull-down available (unlike the input-only `GPIO34`–`GPIO39`), and it is routable to PCNT. Feed the sensor output through a level shifter or divider — the ESP32 is **not** 5 V tolerant.
+
 Current conversion:
 
 ```

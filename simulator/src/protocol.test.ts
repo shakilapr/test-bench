@@ -40,10 +40,12 @@ describe("buildTelemetry", () => {
 describe("buildMetadata", () => {
   it("includes channels, commands, and quality_codes", () => {
     const m = buildMetadata("bench-sim-01");
-    expect(m.metadata_version).toBe(1);
+    expect(m.metadata_version).toBe(2);
     expect(m.channels.map((c) => c.key)).toContain("current_a");
+    expect(m.channels.map((c) => c.key)).toContain("motor_rpm");
     expect(m.commands.map((c) => c.type)).toContain("set_sample_interval");
     expect(m.quality_codes.current_a["1"]).toBe("saturated");
+    expect(m.quality_codes.motor_rpm["1"]).toBe("sensor fault");
   });
 });
 

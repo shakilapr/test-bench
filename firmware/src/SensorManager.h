@@ -4,6 +4,7 @@
 #include <Wire.h>
 
 #include "Current_ADS1115.h"
+#include "PulseCounter.h"
 
 struct TelemetrySample {
   float current_amps = 0.0f;
@@ -13,6 +14,8 @@ struct TelemetrySample {
   bool ads_saturated = false;
   bool ads_ok = false;
   bool temp_ok = false;
+  float motor_rpm = 0.0f;
+  bool rpm_ok = false;
 };
 
 class SensorManager {
@@ -24,12 +27,14 @@ class SensorManager {
   const TelemetrySample& sample() const;
   bool adsOk() const { return sample_.ads_ok; }
   bool tempOk() const { return sample_.temp_ok; }
+  bool rpmOk() const { return sample_.rpm_ok; }
 
  private:
   bool beginChipTemperature();
   bool readChipTemperature(float* out_celsius);
 
   CurrentADS1115 current_sensor_;
+  PulseCounter pulse_counter_;
   TelemetrySample sample_;
   void* temp_handle_;
   bool temp_started_;

@@ -131,6 +131,33 @@ not on the bus — recheck the four wires before suspecting code.
 `current_amps = (measured_mV / 75 mV) × 200 A`. With a 15 mV input on
 the shunt that is `(15/75)×200 ≈ 40 A` on the chart.
 
+## Motor speed via PCNT (`motor_rpm`)
+
+A Hall-effect sensor on the motor produces one (or more) pulses per
+revolution. The pulse must be **level-shifted to 3.3 V** before reaching
+the ESP32 — it is not 5 V tolerant.
+
+- **Wire**: sensor signal → `GPIO33` (`Config::kHallPulsePin`); sensor
+  GND → ESP32 `GND` (mandatory — voltage is only meaningful with a
+  shared reference).
+- **Why `GPIO33`**: not a boot-strap pin (`GPIO0/2/5/12/15` are) and has
+  internal pull-ups (`GPIO34`–`GPIO39` don't), so it's the safest
+  general-purpose pin that the PCNT peripheral can route to.
+- **Why PCNT, not `attachInterrupt`**: the **P**ulse **C**ou**NT**er is
+  a hardware peripheral — it counts edges in silicon while the CPU
+  sleeps or runs other code. Interrupt-driven counting drops pulses
+  under load. PCNT also has a **hardware glitch filter** (set to 1 µs
+  here, `Config::kPcntGlitchNs`) that swallows commutation noise.
+- **Edge config**: count **rising edges only**. Counting both edges
+  doubles the RPM reading.
+- **RPM math**: `rpm = (count / dt_seconds / pulses_per_rev) × 60`.
+  `Config::kHallPulsesPerRev` defaults to `1.0` — set it to your
+  sensor's actual pulse count per revolution.
+
+The `motor_rpm` channel flows through the same telemetry path as
+everything else (no special transport), and the UI shows it on a
+dedicated **Motor** tab.
+
 ## Setup, in three commands
 
 ```powershell

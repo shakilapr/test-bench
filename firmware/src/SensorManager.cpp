@@ -11,12 +11,15 @@
 #endif
 
 SensorManager::SensorManager()
-    : current_sensor_(), sample_(), temp_handle_(nullptr), temp_started_(false) {}
+    : current_sensor_(), pulse_counter_(), sample_(),
+      temp_handle_(nullptr), temp_started_(false) {}
 
 bool SensorManager::begin(TwoWire& wire) {
   sample_.ads_ok = current_sensor_.begin(wire, Config::kAds1115Address);
   sample_.temp_ok = beginChipTemperature();
-  return sample_.ads_ok || sample_.temp_ok;
+  sample_.rpm_ok = pulse_counter_.begin(Config::kHallPulsePin,
+                                        Config::kPcntGlitchNs);
+  return sample_.ads_ok || sample_.temp_ok || sample_.rpm_ok;
 }
 
 bool SensorManager::update() {
@@ -32,7 +35,17 @@ bool SensorManager::update() {
   sample_.temp_ok = readChipTemperature(&chip_temp_c);
   sample_.chip_temp_c = chip_temp_c;
 
-  return sample_.ads_ok || sample_.temp_ok;
+  if (sample_.rpm_ok) {
+    float rpm = 0.0f;
+    if (pulse_counter_.sampleRpm((uint32_t)millis(),
+                                 Config::kHallPulsesPerRev, &rpm)) {
+      sample_.motor_rpm = rpm;
+    } else {
+      sample_.rpm_ok = false;
+    }
+  }
+
+  return sample_.ads_ok || sample_.temp_ok || sample_.rpm_ok;
 }
 
 const TelemetrySample& SensorManager::sample() const { return sample_; }

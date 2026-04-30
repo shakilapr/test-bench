@@ -34,7 +34,7 @@ export function buildMetadata(deviceId: string) {
   return {
     v: 1,
     device_id: deviceId,
-    metadata_version: 1,
+    metadata_version: 2,
     channels: [
       {
         key: "current_a",
@@ -54,6 +54,15 @@ export function buildMetadata(deviceId: string) {
         recordable: true,
         chartable: true,
       },
+      {
+        key: "motor_rpm",
+        label: "Motor speed",
+        unit: "rpm",
+        precision: 0,
+        kind: "measurement",
+        recordable: true,
+        chartable: true,
+      },
     ],
     commands: [
       {
@@ -67,6 +76,7 @@ export function buildMetadata(deviceId: string) {
     quality_codes: {
       current_a: { "0": "ok", "1": "saturated", "2": "low_snr" },
       chip_temp_c: { "0": "ok", "1": "fault" },
+      motor_rpm: { "0": "ok", "1": "sensor fault" },
     },
   };
 }

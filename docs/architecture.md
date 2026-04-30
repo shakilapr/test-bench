@@ -325,11 +325,13 @@ Payload:
   "time_synced": true,
   "readings": {
     "current_a": 12.34,
-    "chip_temp_c": 41.8
+    "chip_temp_c": 41.8,
+    "motor_rpm": 3120
   },
   "quality": {
     "current_a": 0,
-    "chip_temp_c": 0
+    "chip_temp_c": 0,
+    "motor_rpm": 0
   }
 }
 ```
@@ -410,6 +412,15 @@ Payload:
       "unit": "degC",
       "precision": 1,
       "kind": "health",
+      "recordable": true,
+      "chartable": true
+    },
+    {
+      "key": "motor_rpm",
+      "label": "Motor RPM",
+      "unit": "rpm",
+      "precision": 0,
+      "kind": "measurement",
       "recordable": true,
       "chartable": true
     }

@@ -8,6 +8,23 @@ constexpr uint8_t kI2cSdaPin = 12;
 constexpr uint8_t kI2cSclPin = 17;
 constexpr uint8_t kAds1115Address = 0x48;
 
+// Motor speed reader (Hall sensor → PCNT). GPIO33 is a safe general-purpose
+// pin that does not interfere with bootstrap (unlike GPIO0/2/5/12/15) and
+// has internal pull-up/pull-down support (unlike input-only GPIO34-39).
+//
+// Wiring requirement: motor/controller GND must be common with ESP32 GND,
+// otherwise the level-shifted 3.3 V signal is just floating noise. The
+// signal is routed to the PCNT (Pulse Counter) peripheral so we count
+// edges in hardware — no ISR latency, accurate at high RPM.
+//
+// kHallPulsesPerRev: pulses produced by the sensor per full revolution.
+// One magnet on the rotor with one Hall sensor = 1 pulse/rev.
+// kPcntGlitchNs: hardware glitch filter; ignores pulses shorter than this
+// (rejects motor commutation noise / brief sparks).
+constexpr int8_t   kHallPulsePin       = 33;
+constexpr float    kHallPulsesPerRev   = 1.0f;
+constexpr uint16_t kPcntGlitchNs       = 1000;  // 1 µs
+
 // ADS gain GAIN_SIXTEEN (+/- 0.256 V) suits the 75 mV full-scale shunt.
 constexpr uint16_t kDefaultSampleIntervalMs = 500;
 constexpr uint16_t kMinSampleIntervalMs = 100;

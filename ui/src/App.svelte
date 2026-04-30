@@ -7,10 +7,12 @@
   import { WsClient } from "./lib/ws.js";
   import DeviceList from "./lib/DeviceList.svelte";
   import LivePanel from "./lib/LivePanel.svelte";
+  import MotorPanel from "./lib/MotorPanel.svelte";
   import CommandPanel from "./lib/CommandPanel.svelte";
   import RecordingPanel from "./lib/RecordingPanel.svelte";
 
   let ws: WsClient | null = null;
+  let view: "live" | "motor" = "live";
 
   onMount(() => {
     refreshDevices();
@@ -53,7 +55,28 @@
 
   <main class="main">
     {#if dev}
-      <LivePanel device={dev} reading={$liveReadings[dev.device_id]} />
+      <div class="view-tabs" role="tablist" data-testid="view-tabs">
+        <button
+          role="tab"
+          aria-selected={view === "live"}
+          class:active={view === "live"}
+          on:click={() => (view = "live")}
+          data-testid="view-tab-live"
+        >Live</button>
+        <button
+          role="tab"
+          aria-selected={view === "motor"}
+          class:active={view === "motor"}
+          on:click={() => (view = "motor")}
+          data-testid="view-tab-motor"
+        >Motor</button>
+      </div>
+
+      {#if view === "live"}
+        <LivePanel device={dev} reading={$liveReadings[dev.device_id]} />
+      {:else}
+        <MotorPanel device={dev} reading={$liveReadings[dev.device_id]} />
+      {/if}
       <div class="row">
         <CommandPanel device={dev} />
         <RecordingPanel device={dev} />
@@ -121,4 +144,25 @@
     .main .row { grid-template-columns: 1fr; }
   }
   .muted { color: #888; }
+  .view-tabs {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid #1c232c;
+    margin-bottom: 0.25rem;
+  }
+  .view-tabs button {
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    color: #9aa4b1;
+    padding: 0.5rem 1rem;
+    font-size: 0.95rem;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .view-tabs button:hover { color: #e6e9ef; }
+  .view-tabs button.active {
+    color: #e6e9ef;
+    border-bottom-color: #4ea1ff;
+  }
 </style>

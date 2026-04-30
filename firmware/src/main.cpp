@@ -42,8 +42,9 @@ void setup() {
     if (found == 0) Serial.println("[i2c] no devices found");
   }
   bool ok = sensor_manager.begin(Wire);
-  Serial.printf("[sensors] begin: ads_ok=%d temp_ok=%d\n",
-                sensor_manager.adsOk(), sensor_manager.tempOk());
+  Serial.printf("[sensors] begin: ads_ok=%d temp_ok=%d rpm_ok=%d\n",
+                sensor_manager.adsOk(), sensor_manager.tempOk(),
+                sensor_manager.rpmOk());
   if (!ok) Serial.println("sensors: degraded");
 
   if (!provision.load()) {
@@ -96,7 +97,7 @@ void loop() {
   network_manager.loop();
   if (!network_manager.connected()) { delay(50); return; }
   if (!meta_published) {
-    publisher->publishMetadata(/*metadata_version=*/2);
+    publisher->publishMetadata(/*metadata_version=*/3);
     meta_published = true;
   }
 
