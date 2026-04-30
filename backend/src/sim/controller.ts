@@ -53,6 +53,10 @@ export class SimController {
           stdio: ["ignore", "pipe", "pipe"],
           env: { ...process.env },
           windowsHide: true,
+          // npm.cmd is a Windows batch script and child_process.spawn rejects
+          // .cmd/.bat files without a shell (EINVAL). On POSIX `npm` is a
+          // real executable so shell:false works fine.
+          shell: process.platform === "win32",
         }
       );
       child.stdout?.on("data", (b) => process.stdout.write(`[sim] ${b}`));
