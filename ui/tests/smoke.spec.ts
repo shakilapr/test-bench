@@ -7,7 +7,7 @@ import { test, expect, Page } from "@playwright/test";
 const DEVICE = "bench-sim-01";
 
 async function waitForLive(page: Page) {
-  await expect(page.getByTestId("ws-status")).toContainText("live");
+  await expect(page.getByTestId("ws-status")).toContainText("WS");
   await expect(page.getByTestId(`device-row-${DEVICE}`)).toBeVisible();
   await expect(page.getByTestId(`live-panel-${DEVICE}`)).toBeVisible();
 }
@@ -60,9 +60,9 @@ test.describe("Bench UI — live pipeline", () => {
     await page.goto("/");
     await waitForLive(page);
 
-    // Block-level Start → REC badge appears in the header.
+    // Block-level Start → active recording line shows in the panel.
     await page.getByTestId("start-rec-btn").click();
-    await expect(page.getByTestId("header-rec-active")).toBeVisible();
+    await expect(page.getByTestId("rec-active")).toBeVisible();
 
     // Let the sim publish a few samples.
     await page.waitForTimeout(3000);

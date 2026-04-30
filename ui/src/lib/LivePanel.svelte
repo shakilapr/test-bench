@@ -71,7 +71,6 @@
       </div>
     {/each}
     <div class="meta">
-      <span class="status-{device.last_status}">● {device.last_status}</span>
       <span class="muted">v{device.metadata_version} · {channels.length} ch</span>
     </div>
   </div>

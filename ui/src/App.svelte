@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import {
     devices, selectedDeviceId, selectedDevice, liveReadings, wsConnected,
-    activeRecording, refreshDevices,
+    refreshDevices,
   } from "./lib/stores.js";
   import { WsClient } from "./lib/ws.js";
   import DeviceList from "./lib/DeviceList.svelte";
@@ -21,19 +21,14 @@
   });
 
   $: dev = $selectedDevice;
-  $: active = dev ? $activeRecording[dev.device_id] : null;
 </script>
 
 <div class="app">
   <aside class="sidebar">
     <div class="brand">
       <h1>Bench</h1>
-      <span class="ws-{$wsConnected ? 'on' : 'off'}" data-testid="ws-status">
-        {$wsConnected ? "● live" : "○ offline"}
-      </span>
     </div>
     <DeviceList items={$devices} />
-    <div class="sim-slot"><SimButton /></div>
   </aside>
 
   <header class="topbar">
@@ -43,14 +38,19 @@
         <strong data-testid="current-device">{dev.device_id}</strong>
         <span class="status-{dev.last_status}">● {dev.last_status}</span>
       </div>
-      {#if active}
-        <span class="rec-badge" data-testid="header-rec-active">
-          ● REC <code>{active.recording_id.slice(0, 10)}…</code>
-        </span>
-      {/if}
     {:else}
       <span class="muted">Select a device</span>
     {/if}
+    <div class="topbar-right">
+      <SimButton />
+      <span
+        class="ws ws-{$wsConnected ? 'on' : 'off'}"
+        data-testid="ws-status"
+        title={$wsConnected ? "WebSocket connected" : "WebSocket disconnected"}
+      >
+        {$wsConnected ? "● WS" : "○ WS"}
+      </span>
+    </div>
   </header>
 
   <main class="main">
@@ -87,8 +87,9 @@
     padding: 1rem; border-bottom: 1px solid #222;
   }
   .brand h1 { margin: 0; font-size: 1.1rem; letter-spacing: 0.05em; }
-  .ws-on { color: var(--ok); font-size: 0.85rem; }
-  .ws-off { color: var(--err); font-size: 0.85rem; }
+  .ws-on { color: var(--ok); }
+  .ws-off { color: var(--err); }
+  .ws { font-size: 0.8rem; font-variant: small-caps; letter-spacing: 0.04em; }
   .topbar {
     grid-area: topbar;
     display: flex; justify-content: space-between; align-items: center;
@@ -96,14 +97,10 @@
     gap: 1rem;
     min-width: 0;
   }
+  .topbar-right { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
   .cur { display: flex; align-items: center; gap: 0.75rem; min-width: 0; flex-shrink: 1; overflow: hidden; }
   .cur strong { font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; }
   .cur-label { color: #9aa4b1; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0; }
-  .rec-badge {
-    color: var(--err); font-size: 0.85rem; font-weight: 600;
-    animation: pulse 1.4s ease-in-out infinite;
-  }
-  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.55 } }
   .main {
     grid-area: main;
     overflow-y: auto;
@@ -123,8 +120,4 @@
     .main .row { grid-template-columns: 1fr; }
   }
   .muted { color: #888; }
-  .sim-slot {
-    padding: 0.75rem 1rem;
-    border-top: 1px solid #222;
-  }
 </style>
