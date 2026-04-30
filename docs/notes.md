@@ -1,6 +1,6 @@
 # Notes
 
-A short, opinionated tour of this repo. Read this once, then keep
+Read this once, then keep
 `architecture.md` and `wiring.md` open as references while you work.
 
 ## What this project is
