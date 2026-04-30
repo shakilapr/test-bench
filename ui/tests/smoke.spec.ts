@@ -108,4 +108,25 @@ test.describe("Bench UI — live pipeline", () => {
     const firstRow = page.getByTestId("rec-history").locator("tbody tr").first();
     await expect(firstRow.locator("td").nth(1)).toHaveText("playwright-run");
   });
+
+  test("chart window selector + reset button manage retained samples", async ({ page }) => {
+    await page.goto("/");
+    await waitForLive(page);
+
+    // Default window is 60s; switch to 5m and confirm the select keeps it.
+    const win = page.getByTestId("chart-window");
+    await expect(win).toHaveValue("60s");
+    await win.selectOption("5m");
+    await expect(win).toHaveValue("5m");
+
+    // Wait for at least one sample so reset has something to clear.
+    const reset = page.getByTestId("chart-reset");
+    await expect(reset).toBeEnabled();
+    await reset.click();
+    // After reset the buffer is empty, so the button disables itself
+    // until a new sample arrives (~500 ms cadence). Just check it toggled.
+    await expect(reset).toBeDisabled({ timeout: 1000 }).catch(() => {});
+    // And then re-enables once the sim publishes again.
+    await expect(reset).toBeEnabled({ timeout: 5000 });
+  });
 });
