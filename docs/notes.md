@@ -155,8 +155,9 @@ the ESP32 — it is not 5 V tolerant.
   sensor's actual pulse count per revolution.
 
 The `motor_rpm` channel flows through the same telemetry path as
-everything else (no special transport), and the UI shows it on a
-dedicated **Motor** tab.
+everything else (no special transport), and the UI shows it as a third
+tile + chart tab on the Live panel — alongside `current_a` and
+`chip_temp_c`. CSV exports include all recordable channels in one file.
 
 ### Trying it without hardware
 
