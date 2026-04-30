@@ -5,6 +5,7 @@
 .clang_complete
 .gcc-flags.json
 
+
 # Build artifacts
 *.bin
 *.elf
@@ -34,6 +35,7 @@ Thumbs.db
 
 # Local agent/session files
 .codex
+.playwright-mcp/
 
 # Node / web
 node_modules/
@@ -52,3 +54,6 @@ test-results/
 # Local data
 backend/data/
 
+
+
+docs/screenshots/

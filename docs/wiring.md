@@ -8,11 +8,11 @@ Board: ESP32-S3-DevKitC-1. Schematic: https://documentation.espressif.com/esp-de
 | --- | --- | --- |
 | `3V3` | `VDD` | 3.3 V power |
 | `GND` | `GND` | Common ground; also connect shunt reference ground here |
-| `GPIO8` | `SDA` | I2C data (`Config::kI2cSdaPin`) |
-| `GPIO9` | `SCL` | I2C clock (`Config::kI2cSclPin`) |
+| `GPIO12` | `SDA` | I2C data (`Config::kI2cSdaPin`) |
+| `GPIO17` | `SCL` | I2C clock (`Config::kI2cSclPin`) |
 | — | `A0` | Shunt high-side sense |
 | — | `A1` | Shunt low-side sense |
-| — | `ADDR` → `GND` | Sets I2C address to `0x48` |
+| — | `ADDR` (floating or → `GND`) | Both yield `0x48`. ADDR has an internal pull-down on the ADS1115 module, so a floating pin is fine. |
 
 Current conversion:
 
@@ -26,4 +26,5 @@ current_amps = (measured_mV / 75 mV) × 200 A
 - Keep shunt sense wires short and away from high-current paths.
 - Do not connect shunt signals directly to ESP32 GPIO.
 - Avoid `GPIO0`, `GPIO3`, `GPIO19`, `GPIO20`, `GPIO43`–`GPIO46` for expansion (boot-strapping and USB/UART).
+- At boot the firmware scans the I2C bus and logs every responding address as `[i2c] device at 0xNN`. If you don't see `0x48`, recheck SDA/SCL/VDD/GND before suspecting code.
 - Update this file when adding a new peripheral.

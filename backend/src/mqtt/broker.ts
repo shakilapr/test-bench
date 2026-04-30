@@ -29,7 +29,10 @@ export class MqttBroker {
     this.client.on("reconnect", () => console.log("[mqtt] reconnecting"));
     this.client.on("close", () => this.bus.emit("mqtt.disconnected", null));
     this.client.on("error", (err) => console.error("[mqtt] error:", err.message));
-    this.client.on("message", (topic, payload) => this.handle(topic, payload));
+    this.client.on("message", (topic, payload) => {
+      console.log(`[mqtt] rx ${topic} (${payload.length}B)`);
+      this.handle(topic, payload);
+    });
   }
 
   private handle(topic: string, payload: Buffer) {
@@ -49,7 +52,11 @@ export class MqttBroker {
 
   private dispatch<T>(kind: string, deviceId: string, schema: { safeParse: (x: unknown) => { success: boolean; data?: T; error?: unknown } }, json: unknown) {
     const r = schema.safeParse(json);
-    if (!r.success) { console.warn(`[mqtt] schema reject on ${kind} for ${deviceId}`); return; }
+    if (!r.success) {
+      console.warn(`[mqtt] schema reject on ${kind} for ${deviceId}:`, JSON.stringify(r.error));
+      console.warn(`[mqtt] rejected payload:`, JSON.stringify(json));
+      return;
+    }
     this.bus.emit(`device.${kind}`, r.data);
   }
 

@@ -11,6 +11,7 @@
   ],
   "scripts": {
     "dev": "concurrently -n be,sim,ui -c blue,green,magenta \"npm:dev:backend\" \"npm:dev:sim\" \"npm:dev:ui\"",
+    "dev:real": "concurrently -n be,ui -c blue,magenta \"npm:dev:backend\" \"npm:dev:ui\"",
     "dev:backend": "cross-env NODE_ENV=development PORT=3000 npm --workspace backend run dev",
     "dev:sim": "wait-on tcp:1883 && npm --workspace simulator run sim",
     "dev:ui": "npm --workspace ui run dev",

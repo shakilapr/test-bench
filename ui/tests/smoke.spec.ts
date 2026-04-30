@@ -56,20 +56,20 @@ test.describe("Bench UI — live pipeline", () => {
     await expect(page.getByTestId("cmd-set_sample_interval-result")).toContainText(/cmd-/);
   });
 
-  test("records a session via header Start/Stop and exports valid CSV", async ({ page }) => {
+  test("records a session via the panel record/stop buttons and exports valid CSV", async ({ page }) => {
     await page.goto("/");
     await waitForLive(page);
 
-    // Header Start → REC badge appears.
-    await page.getByTestId("header-start").click();
+    // Block-level Start → REC badge appears in the header.
+    await page.getByTestId("start-rec-btn").click();
     await expect(page.getByTestId("header-rec-active")).toBeVisible();
 
     // Let the sim publish a few samples.
     await page.waitForTimeout(3000);
 
-    // Header Stop → Start is back.
-    await page.getByTestId("header-stop").click();
-    await expect(page.getByTestId("header-start")).toBeVisible();
+    // Block-level Stop → start button is back.
+    await page.getByTestId("stop-rec-btn").click();
+    await expect(page.getByTestId("start-rec-btn")).toBeVisible();
 
     // Newest history row should be the recording we just stopped, with samples > 0.
     const firstRow = page.getByTestId("rec-history").locator("tbody tr").first();

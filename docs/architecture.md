@@ -340,9 +340,10 @@ Rules:
 - `boot_id` changes every boot.
 - `seq` increments per telemetry message.
 - `readings` is flexible so new channels do not require a new transport.
+- A reading is omitted entirely when the sensor is unreadable (e.g. ADS1115 not on the bus). The firmware never emits `NaN` because ArduinoJson serialises `NaN` as JSON `null`, which the backend schema rejects — silently dropping the whole packet. See `firmware/src/bench/Protocol.cpp::buildTelemetryJson`.
 - `quality` is optional per channel and stores an integer code.
 - `0` means OK.
-- nonzero quality codes are defined in metadata and stored as integers so the backend and Grafana can filter them cheaply.
+- nonzero quality codes are defined in metadata (`metadata.quality_codes[channel][code]` → human label) and stored as integers so the backend and Grafana can filter them cheaply. The UI looks up the label and shows it next to the channel.
 - `time_unix_ms` is included only after NTP is synced.
 - `time_synced` tells the backend whether ESP UTC time is trustworthy.
 - The backend should still store its receive time; ESP time is useful for alignment and diagnostics, not as the only clock.
@@ -785,7 +786,7 @@ src/
   main.cpp           entry point: wires managers, runs loop
   Config.h           compile-time constants only, no secrets
   SensorManager.*    reads ADS1115 and chip temperature, returns TelemetrySample
-  NetworkManager.*   Wi-Fi STA/AP, MQTT transport, HTTP diagnostic page
+  NetworkManager.*   Wi-Fi STA + always-on SoftAP fallback, MQTT transport
   MqttTransport.*    MQTT connect/reconnect, topic pub/sub, payload serialise
   CommandManager.*   receives commands, validates, deduplicates by cmd_id, executes
   DeviceState.*      shared runtime state (boot_id, seq counter, device_id)
@@ -812,9 +813,10 @@ One module, one responsibility. `main.cpp` only wires them together and drives t
 
 Provisioned runtime values (NVS):
 
-- Wi-Fi SSID and password
+- Wi-Fi SSID and password (optional; if absent, the device runs AP-only)
 - MQTT host, port, and credentials
 - stable `device_id` (derived from MAC and stored once)
+- SoftAP password override (`ap_pass`, optional)
 - `boot_id` source counter if not generated from MAC+millis
 
 Time:
@@ -1028,9 +1030,13 @@ Reconnection strategy (see `firmware/src/NetworkManager.cpp`):
    calls `ESP.restart()`. Picks the unit up from kernel-stack states the
    reconnect loop alone can't escape (DHCP wedged, AP firmware bug, radio
    driver panic).
-5. **No SoftAP / captive portal.** Provisioning is over USB serial only
-   (`tools/provisioning`). Removing the captive-portal path keeps the
-   firmware small and keeps the device off the air when it has no creds.
+5. **SoftAP fallback alongside STA.** The firmware always brings up a
+   SoftAP named `bench-<device_id>` (default password
+   `Config::kSoftApPasswordDefault`, overridable via NVS key `ap_pass`)
+   in addition to STA. Operators on benches without a router can attach
+   a laptop directly to the AP and run the broker there; STA still drives
+   telemetry whenever provisioned creds work. The firmware still serves
+   no HTTP/captive portal — only Wi-Fi association and MQTT.
 
 Operator-side connectivity checks:
 

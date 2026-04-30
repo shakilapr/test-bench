@@ -40,6 +40,62 @@ describe("MetadataSchema", () => {
   });
 });
 
+describe("StatusSchema (firmware contract)", () => {
+  // These are the literal payload shapes produced by
+  // firmware/src/bench/Protocol.cpp::buildStatusJson. If they ever stop
+  // parsing the firmware will silently fall off the UI.
+  it("accepts the firmware online status", () => {
+    const r = StatusSchema.safeParse({
+      v: 1,
+      device_id: "bench-01",
+      boot_id: "boot-xyz",
+      state: "online",
+      fw: "0.1.0",
+      sample_interval_ms: 250,
+    });
+    expect(r.success).toBe(true);
+  });
+  it("accepts the firmware offline LWT", () => {
+    const r = StatusSchema.safeParse({
+      v: 1,
+      device_id: "bench-01",
+      boot_id: "boot-xyz",
+      state: "offline",
+    });
+    expect(r.success).toBe(true);
+  });
+  it("rejects the legacy {online: bool} shape that broke status flow", () => {
+    expect(
+      StatusSchema.safeParse({ v: 1, device_id: "bench-01", online: true }).success
+    ).toBe(false);
+  });
+});
+
+describe("MetadataSchema (firmware contract)", () => {
+  // Same idea: this is the literal payload from buildMetadataJson.
+  it("accepts the firmware metadata frame", () => {
+    const r = MetadataSchema.safeParse({
+      v: 1,
+      device_id: "bench-01",
+      metadata_version: 1,
+      channels: [
+        { key: "current_a", label: "Shunt current", unit: "A",
+          kind: "measurement", precision: 2, recordable: true, chartable: true },
+        { key: "chip_temp_c", label: "Chip Temp", unit: "C",
+          kind: "health", precision: 1, recordable: true, chartable: true },
+      ],
+    });
+    expect(r.success).toBe(true);
+  });
+  it("rejects channels missing kind (the previous firmware shape)", () => {
+    const r = MetadataSchema.safeParse({
+      v: 1, device_id: "bench-01", metadata_version: 1,
+      channels: [{ key: "current_a", label: "Shunt current", unit: "A" }],
+    });
+    expect(r.success).toBe(false);
+  });
+});
+
 describe("AckSchema", () => {
   it("rejects unknown statuses", () => {
     expect(AckSchema.safeParse({ v: 1, cmd_id: "x", status: "weird" }).success).toBe(false);

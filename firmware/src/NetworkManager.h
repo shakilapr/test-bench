@@ -13,10 +13,14 @@ class NetworkManager {
  public:
   using CommandHandler = std::function<void(const char* topic, const uint8_t* payload, size_t len)>;
 
-  bool begin(const Provision& prov);
+  bool begin(const Provision& prov, const String& boot_id);
+  bool beginProvisioningAp();
   void loop();
   bool connected() { return mqtt_.connected(); }
-  bool online() { return WiFi.status() == WL_CONNECTED && mqtt_.connected(); }
+  // "online" means we have a working MQTT path. With AP+STA it doesn't
+  // matter which interface carries the session; the watchdog only cares
+  // that the broker is reachable.
+  bool online() { return mqtt_.connected(); }
 
   bool publishTelemetry(const char* json, size_t len);
   bool publishStatus(const char* json, size_t len, bool retained);
@@ -28,6 +32,7 @@ class NetworkManager {
 
  private:
   void buildTopics();
+  bool startSoftAp();
   bool ensureWifi();
   bool ensureMqtt();
   void publishOnlineStatus();
@@ -39,6 +44,7 @@ class NetworkManager {
   WiFiClient wifi_client_;
   PubSubClient mqtt_{wifi_client_};
   String device_id_;
+  String boot_id_;
   String mqtt_host_;
   uint16_t mqtt_port_ = 1883;
   String mqtt_user_;
@@ -51,6 +57,9 @@ class NetworkManager {
   String topic_ack_;
   String topic_cmd_;
   String client_id_;
+  String ap_ssid_;
+  String ap_pass_;
+  bool mqtt_enabled_ = false;
 
   // Independent backoff state for each layer (Wi-Fi vs MQTT). Sharing one
   // timer caused either layer to silently starve the other after an outage.

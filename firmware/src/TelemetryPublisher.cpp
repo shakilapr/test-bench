@@ -6,23 +6,22 @@
 #include "bench/Protocol.h"
 
 void TelemetryPublisher::publishMetadata(uint32_t metadata_version) {
-  JsonDocument doc;
-  doc["v"] = 1;
-  doc["device_id"] = net_.deviceId();
-  doc["fw_version"] = Config::kFirmwareVersion;
-  doc["metadata_version"] = metadata_version;
-  doc["sample_interval_ms"] = state_.sampleIntervalMs();
-  JsonArray channels = doc["channels"].to<JsonArray>();
-  {
-    JsonObject c = channels.add<JsonObject>();
-    c["key"] = "current_a"; c["unit"] = "A"; c["label"] = "Shunt current";
-  }
-  {
-    JsonObject c = channels.add<JsonObject>();
-    c["key"] = "chip_temp_c"; c["unit"] = "C"; c["label"] = "ADS chip temperature";
-  }
-  char buf[512];
-  size_t n = serializeJson(doc, buf, sizeof(buf));
+  bench::ChannelMeta channels[2] = {
+    {"current_a",   "Shunt current",          "A", "measurement",
+     /*precision=*/2, /*recordable=*/true, /*chartable=*/true},
+    {"chip_temp_c", "Chip Temp",  "C", "health",
+     /*precision=*/1, /*recordable=*/true, /*chartable=*/true},
+  };
+  // Quality code 1 = sensor not responding (ADS1115 not found on I2C).
+  bench::QualityCode qcodes[1] = {
+    {"current_a", 1, "sensor fault"},
+  };
+  char buf[640];
+  size_t n = bench::buildMetadataJson(buf, sizeof(buf),
+                                      net_.deviceId().c_str(),
+                                      metadata_version,
+                                      channels, 2,
+                                      qcodes, 1);
   if (n > 0) net_.publishMeta(buf, n);
 }
 

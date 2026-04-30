@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import {
     devices, selectedDeviceId, selectedDevice, liveReadings, wsConnected,
-    activeRecording, refreshDevices, refreshRecordings,
+    activeRecording, refreshDevices,
   } from "./lib/stores.js";
   import { WsClient } from "./lib/ws.js";
   import DeviceList from "./lib/DeviceList.svelte";
@@ -11,7 +11,6 @@
   import RecordingPanel from "./lib/RecordingPanel.svelte";
 
   let ws: WsClient | null = null;
-  let busy = false;
 
   onMount(() => {
     refreshDevices();
@@ -22,25 +21,6 @@
 
   $: dev = $selectedDevice;
   $: active = dev ? $activeRecording[dev.device_id] : null;
-
-  async function quickStart() {
-    if (!dev) return;
-    busy = true;
-    try {
-      await fetch(`/api/devices/${dev.device_id}/recordings/start`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: "{}",
-      });
-      await refreshRecordings(dev.device_id);
-    } finally { busy = false; }
-  }
-  async function quickStop() {
-    if (!dev) return;
-    busy = true;
-    try {
-      await fetch(`/api/devices/${dev.device_id}/recordings/stop`, { method: "POST" });
-      await refreshRecordings(dev.device_id);
-    } finally { busy = false; }
-  }
 </script>
 
 <div class="app">
@@ -61,20 +41,11 @@
         <strong data-testid="current-device">{dev.device_id}</strong>
         <span class="status-{dev.last_status}">● {dev.last_status}</span>
       </div>
-      <div class="actions">
-        {#if active}
-          <span class="rec-badge" data-testid="header-rec-active">
-            ● REC <code>{active.recording_id.slice(0, 10)}…</code>
-          </span>
-          <button class="danger" on:click={quickStop} disabled={busy} data-testid="header-stop">
-            ■ Stop
-          </button>
-        {:else}
-          <button class="primary" on:click={quickStart} disabled={busy} data-testid="header-start">
-            ● Record
-          </button>
-        {/if}
-      </div>
+      {#if active}
+        <span class="rec-badge" data-testid="header-rec-active">
+          ● REC <code>{active.recording_id.slice(0, 10)}…</code>
+        </span>
+      {/if}
     {:else}
       <span class="muted">Select a device</span>
     {/if}
@@ -126,14 +97,11 @@
   .cur { display: flex; align-items: center; gap: 0.75rem; min-width: 0; flex-shrink: 1; overflow: hidden; }
   .cur strong { font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; }
   .cur-label { color: #9aa4b1; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0; }
-  .actions { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
   .rec-badge {
     color: var(--err); font-size: 0.85rem; font-weight: 600;
     animation: pulse 1.4s ease-in-out infinite;
   }
   @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.55 } }
-  .primary { background: #1f3a5c; border-color: var(--accent); }
-  .danger { background: #5c1f1f; border-color: var(--err); }
   .main {
     grid-area: main;
     overflow-y: auto;

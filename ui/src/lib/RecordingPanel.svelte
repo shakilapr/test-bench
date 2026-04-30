@@ -2,10 +2,17 @@
   import type { DeviceDto } from "./stores.js";
   import { recordings, activeRecording, refreshRecordings, deleteRecording } from "./stores.js";
 
+  import { onDestroy } from "svelte";
+
   export let device: DeviceDto;
   let label = "";
   let busy = false;
   let err = "";
+  let now = Date.now();
+
+  // Tick every second so the elapsed-time display updates.
+  const ticker = setInterval(() => { now = Date.now(); }, 1000);
+  onDestroy(() => clearInterval(ticker));
 
   $: history = $recordings[device.device_id] ?? [];
   $: active = $activeRecording[device.device_id] ?? null;
@@ -46,11 +53,33 @@
   <header class="head">
     <h3>Recordings</h3>
     {#if active}
-      <button class="danger" on:click={stop} disabled={busy} data-testid="stop-rec-btn">■ Stop</button>
+      <button
+        class="icon-btn danger"
+        on:click={stop}
+        disabled={busy}
+        data-testid="stop-rec-btn"
+        title="Stop recording"
+        aria-label="Stop recording"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <rect x="6" y="6" width="12" height="12" fill="currentColor" />
+        </svg>
+      </button>
     {:else}
       <div class="start">
         <input bind:value={label} placeholder="label (optional)" data-testid="rec-label" />
-        <button class="primary" on:click={start} disabled={busy} data-testid="start-rec-btn">● Start</button>
+        <button
+          class="icon-btn record"
+          on:click={start}
+          disabled={busy}
+          data-testid="start-rec-btn"
+          title="Start recording"
+          aria-label="Start recording"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <circle cx="12" cy="12" r="6" fill="currentColor" />
+          </svg>
+        </button>
       </div>
     {/if}
   </header>
@@ -59,7 +88,7 @@
     <p class="active-line" data-testid="rec-active">
       Recording <code>{active.recording_id}</code>
       {#if active.label}— <em>{active.label}</em>{/if}
-      · {fmtDuration(active.started_at, null)}
+      · {fmtDuration(active.started_at, now)}
     </p>
   {/if}
 
@@ -105,8 +134,15 @@
   .head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
   .head h3 { margin: 0; font-size: 1rem; }
   .start { display: flex; gap: 0.5rem; }
-  .primary { background: #1f3a5c; border-color: var(--accent); }
-  .danger { background: #5c1f1f; border-color: var(--err); }
+  .icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; padding: 0; border-radius: 4px;
+    cursor: pointer;
+  }
+  .icon-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+  .icon-btn.record { background: transparent; border: 1px solid var(--err); color: var(--err); }
+  .icon-btn.record:hover { background: #2a1818; }
+  .icon-btn.danger { background: #5c1f1f; border-color: var(--err); color: #fff; }
   .active-line { background: #1f2a3a; padding: 0.5rem 0.75rem; border-radius: 4px; }
   .hist { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
   .hist th, .hist td { padding: 0.4rem 0.5rem; text-align: left; border-bottom: 1px solid #222; }

@@ -22,6 +22,8 @@ class SensorManager {
   bool begin(TwoWire& wire);
   bool update();
   const TelemetrySample& sample() const;
+  bool adsOk() const { return sample_.ads_ok; }
+  bool tempOk() const { return sample_.temp_ok; }
 
  private:
   bool beginChipTemperature();

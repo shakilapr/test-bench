@@ -25,6 +25,42 @@ size_t buildTelemetryJson(char* out, size_t out_len,
                           uint32_t ms,
                           const Reading* readings, size_t n_readings);
 
+struct ChannelMeta {
+  const char* key;
+  const char* label;
+  const char* unit;
+  const char* kind;
+  int precision;
+  bool recordable;
+  bool chartable;
+};
+
+// Serializes a v=1 status payload that conforms to the backend StatusSchema
+// (state is the "online"/"offline" enum, boot_id is required). Pass
+// fw_version == nullptr to omit the optional field, sample_interval_ms == 0
+// to omit it.
+size_t buildStatusJson(char* out, size_t out_len,
+                       const char* device_id,
+                       const char* boot_id,
+                       bool online,
+                       const char* fw_version,
+                       uint32_t sample_interval_ms);
+
+struct QualityCode {
+  const char* channel_key;
+  int code;
+  const char* label;
+};
+
+// Serializes a v=1 metadata payload that conforms to the backend
+// MetadataSchema. `kind` on each channel is required.
+// quality_codes may be nullptr (n_qcodes=0) to omit them.
+size_t buildMetadataJson(char* out, size_t out_len,
+                         const char* device_id,
+                         uint32_t metadata_version,
+                         const ChannelMeta* channels, size_t n_channels,
+                         const QualityCode* qcodes = nullptr, size_t n_qcodes = 0);
+
 struct CommandIn {
   char cmd_id[64];
   char type[64];

@@ -1,3 +1,4 @@
+#include <limits>
 #include <string.h>
 #include <unity.h>
 
@@ -8,6 +9,59 @@ using namespace bench;
 
 void setUp() {}
 void tearDown() {}
+
+void test_buildStatusJson_online_shape() {
+  char buf[256];
+  size_t n = buildStatusJson(buf, sizeof(buf),
+                             "bench-01", "boot-xyz",
+                             /*online=*/true, "1.2.3",
+                             /*sample_interval_ms=*/250);
+  TEST_ASSERT_TRUE(n > 0);
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"v\":1"));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"device_id\":\"bench-01\""));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"boot_id\":\"boot-xyz\""));
+  // Backend StatusSchema requires the "online"/"offline" enum, not a bool.
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"state\":\"online\""));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"fw\":\"1.2.3\""));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"sample_interval_ms\":250"));
+  // Must not regress to the legacy shape.
+  TEST_ASSERT_NULL(strstr(buf, "\"online\":true"));
+}
+
+void test_buildStatusJson_offline_lwt() {
+  // Used as the MQTT Last-Will payload; fw + sample interval should be
+  // omitted to keep the LWT compact.
+  char buf[256];
+  size_t n = buildStatusJson(buf, sizeof(buf),
+                             "bench-01", "boot-xyz",
+                             /*online=*/false, /*fw=*/nullptr,
+                             /*sample_interval_ms=*/0);
+  TEST_ASSERT_TRUE(n > 0);
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"state\":\"offline\""));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"boot_id\":\"boot-xyz\""));
+  TEST_ASSERT_NULL(strstr(buf, "\"fw\""));
+  TEST_ASSERT_NULL(strstr(buf, "\"sample_interval_ms\""));
+}
+
+void test_buildMetadataJson_includes_kind() {
+  ChannelMeta ch[2] = {
+    {"current_a",   "Shunt current",         "A", "measurement", 2, true, true},
+    {"chip_temp_c", "Chip Temp",  "C", "health",      1, true, true},
+  };
+  char buf[512];
+  size_t n = buildMetadataJson(buf, sizeof(buf), "bench-01",
+                               /*metadata_version=*/3, ch, 2);
+  TEST_ASSERT_TRUE(n > 0);
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"v\":1"));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"device_id\":\"bench-01\""));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"metadata_version\":3"));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"key\":\"current_a\""));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"label\":\"Shunt current\""));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"unit\":\"A\""));
+  // Backend MetadataSchema requires `kind` on every channel.
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"kind\":\"measurement\""));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"kind\":\"health\""));
+}
 
 void test_buildTelemetryJson_shape() {
   Reading r[2] = {
@@ -74,9 +128,32 @@ void test_unknown_command_type() {
   TEST_ASSERT_FALSE(v.ok);
 }
 
+void test_buildTelemetryJson_skips_nan_readings() {
+  // When a sensor fails (e.g. chip temp not started) its value is NaN.
+  // NaN serialises as JSON null which the backend z.number() schema rejects,
+  // silently dropping the entire packet. The builder must skip NaN values.
+  float nan_val = std::numeric_limits<float>::quiet_NaN();
+  Reading r[2] = {
+    {"current_a",   1.5f,    0},
+    {"chip_temp_c", nan_val, 1},  // <-- sensor failed; must be skipped
+  };
+  char buf[512];
+  size_t n = buildTelemetryJson(buf, sizeof(buf), "bench-01", "b", 0, 0, r, 2);
+  TEST_ASSERT_TRUE(n > 0);
+  // Good reading present.
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"current_a\":1.5"));
+  // NaN reading absent — no null, no chip_temp_c key.
+  TEST_ASSERT_NULL(strstr(buf, "chip_temp_c"));
+  TEST_ASSERT_NULL(strstr(buf, "null"));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_buildTelemetryJson_shape);
+  RUN_TEST(test_buildTelemetryJson_skips_nan_readings);
+  RUN_TEST(test_buildStatusJson_online_shape);
+  RUN_TEST(test_buildStatusJson_offline_lwt);
+  RUN_TEST(test_buildMetadataJson_includes_kind);
   RUN_TEST(test_parseCommand_ok);
   RUN_TEST(test_parseCommand_rejects_bad_v);
   RUN_TEST(test_parseCommand_missing_cmd_id);

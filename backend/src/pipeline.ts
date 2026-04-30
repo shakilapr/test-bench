@@ -29,7 +29,9 @@ export function wirePipeline(opts: PipelineOptions) {
 
   bus.on("device.telemetry", (raw) => {
     const t = raw as Telemetry;
+    const isNew = !devices.get(t.device_id);
     devices.upsertSeen(t.device_id);
+    if (isNew) bus.emit("device.updated", { device_id: t.device_id });
     const active = recordings.activeFor(t.device_id);
     if (active) buffer.append(active.recording_id, t);
     bus.emit("telemetry.broadcast", t);
