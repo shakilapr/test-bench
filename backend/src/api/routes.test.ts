@@ -19,7 +19,7 @@ function buildApp() {
   const dispatcher = new Dispatcher(broker, commands, bus);
   const buffer = new RecordingBuffer();
   const app = Fastify();
-  registerRoutes(app, { devices, recordings, commands, dispatcher, buffer, grafanaUrl: "http://g" });
+  registerRoutes(app, { devices, recordings, commands, dispatcher, buffer });
   return { app, devices, recordings, bus, commands, broker, buffer };
 }
 

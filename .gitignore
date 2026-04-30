@@ -49,8 +49,6 @@ test-results/
 .env.*
 !.env.example
 
-# Testcontainers / docker volumes
-.testcontainers/
-infra/data/
+# Local data
 backend/data/
 

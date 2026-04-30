@@ -1,18 +1,17 @@
 # Bench Runbook
 
-## Bring up the stack (no Docker, recommended for development)
+## Bring up the stack (no Docker, recommended)
 
 ```powershell
 npm install
 npm run dev
 ```
 
-Backend embeds an MQTT broker (`EMBED_BROKER=true`) and skips Influx writes
-(`INFLUX_DISABLED=true`). Open <http://localhost:5173>. Vite proxies `/api`
-and `/ws` to the backend on port 3000. The simulator publishes as
-`bench-sim-01`.
+Backend embeds an MQTT broker on `:1883`. Open <http://localhost:5173>. Vite
+proxies `/api` and `/ws` to the backend on port 3000. The simulator publishes
+as `bench-sim-01`.
 
-To run the production binary the same way (single port, no Docker):
+To run the production binary the same way (single HTTP port, embedded broker):
 
 ```powershell
 npm run build
@@ -21,42 +20,30 @@ npm start
 
 Open <http://localhost:3000>.
 
-## Bring up the stack (Docker, full Influx + Grafana)
+## Use an external MQTT broker
 
-```powershell
-docker compose -f infra/docker-compose.dev.yml up -d
-npm --workspace backend run dev
-npm --workspace simulator run sim
-npm --workspace ui run dev
-```
-
-## Verify MQTT (Docker path only)
-
-```powershell
-docker exec -it bench-mosquitto mosquitto_sub -t "bench/#" -v
-```
-
-## Stop everything
-
-```powershell
-docker compose -f infra/docker-compose.dev.yml down
-```
-
-## Run the chaos harness
-
-After the full Docker stack + simulator is up:
-
-```powershell
-cd chaos; npm run chaos
-```
-
-It restarts Mosquitto, then asserts the device returns online and a
-command roundtrip still completes.
+Set `EMBED_BROKER=false` and `MQTT_URL=mqtt://host:port` in `backend/.env`,
+then `npm run dev`. Devices and the simulator should be pointed at the same
+broker URL.
 
 ## Reset all state
 
 ```powershell
-docker compose -f infra/docker-compose.dev.yml down -v
-Remove-Item -Recurse -Force infra\data
 Remove-Item -Recurse -Force backend\data
 ```
+
+## Watch device traffic
+
+The UI sidebar shows online/offline state and last-seen. For raw inspection
+when using an external broker, use any MQTT client subscribed to `bench/#`.
+
+## Recording + export
+
+1. Pick a device in the sidebar.
+2. Hit the green **Start recording** button in the header (or the Recordings
+   panel).
+3. Hit **Stop recording**. The row appears in the Recordings table with a
+   sample count and an **Export CSV** link.
+
+Recordings live in an in-memory ring buffer (60k samples per recording) and are
+not persisted across backend restarts.

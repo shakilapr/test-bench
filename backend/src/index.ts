@@ -9,8 +9,6 @@ import { openDb } from "./db/sqlite.js";
 import { DeviceRepo } from "./db/devices.js";
 import { RecordingRepo } from "./db/recordings.js";
 import { CommandRepo } from "./db/commands.js";
-import { InfluxWriter } from "./influx/writer.js";
-import { NoopInfluxWriter, type IInfluxWriter } from "./influx/noop.js";
 import { startEmbeddedBroker, type EmbeddedBroker } from "./mqtt/embedded.js";
 import { MqttBroker } from "./mqtt/broker.js";
 import { Dispatcher } from "./commands/dispatcher.js";
@@ -27,12 +25,6 @@ async function main() {
   const recordings = new RecordingRepo(db);
   const commands = new CommandRepo(db);
   const buffer = new RecordingBuffer();
-  const influx: IInfluxWriter = cfg.INFLUX_DISABLED
-    ? new NoopInfluxWriter()
-    : new InfluxWriter({
-        url: cfg.INFLUX_URL, token: cfg.INFLUX_TOKEN, org: cfg.INFLUX_ORG, bucket: cfg.INFLUX_BUCKET,
-      });
-  if (cfg.INFLUX_DISABLED) console.log("[influx] disabled (INFLUX_DISABLED=true)");
 
   let embedded: EmbeddedBroker | null = null;
   if (cfg.EMBED_BROKER) {
@@ -47,12 +39,12 @@ async function main() {
     bus
   );
   const dispatcher = new Dispatcher(broker, commands, bus);
-  wirePipeline({ bus, devices, recordings, influx, buffer });
+  wirePipeline({ bus, devices, recordings, buffer });
   await broker.start();
 
   const app = Fastify({ logger: { level: cfg.NODE_ENV === "production" ? "info" : "debug" } });
   await app.register(fastifyWebsocket);
-  await registerRoutes(app, { devices, recordings, commands, dispatcher, buffer, grafanaUrl: cfg.GRAFANA_URL });
+  await registerRoutes(app, { devices, recordings, commands, dispatcher, buffer });
   await registerWebsocket(app, bus);
 
   if (cfg.NODE_ENV === "production") {
@@ -73,7 +65,6 @@ async function main() {
     console.log("[backend] shutting down");
     await app.close();
     await broker.stop();
-    await influx.close();
     if (embedded) await embedded.stop();
     db.close();
     process.exit(0);

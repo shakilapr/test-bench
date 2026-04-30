@@ -1,6 +1,6 @@
 {
   "name": "bench-backend",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,7 +15,6 @@
   "dependencies": {
     "@fastify/static": "^7.0.4",
     "@fastify/websocket": "^10.0.1",
-    "@influxdata/influxdb-client": "^1.35.0",
     "aedes": "^0.51.3",
     "better-sqlite3": "^11.1.2",
     "fastify": "^4.28.1",

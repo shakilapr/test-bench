@@ -3,7 +3,7 @@
 #include <Arduino.h>
 
 // Per-boot mutable runtime state. boot_id is regenerated on every cold boot
-// so InfluxDB can detect resets. sample_interval_ms can be changed at runtime
+// so the backend can detect resets. sample_interval_ms can be changed at runtime
 // by a command and is persisted across reboots.
 class DeviceState {
  public:

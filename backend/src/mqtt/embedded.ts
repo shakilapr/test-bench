@@ -1,4 +1,6 @@
-// Optional in-process MQTT broker for the no-Docker dev path.
+// In-process MQTT broker (Aedes). The default deployment is single-process:
+// backend, broker, and HTTP/UI all run together. Disable with EMBED_BROKER=false
+// to point at an external broker instead.
 // Used when EMBED_BROKER=true so a single `npm run dev` (or production
 // binary) can run without Mosquitto.
 

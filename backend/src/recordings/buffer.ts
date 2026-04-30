@@ -6,8 +6,8 @@ export interface RecordingSample {
   quality: Record<string, number>;
 }
 
-// In-memory ring buffer per recording. Independent of Influx so CSV export
-// works in dev (INFLUX_DISABLED=true) and survives Influx outages. Bounded:
+// In-memory ring buffer per recording. Records telemetry while a recording is
+// active so the UI can offer CSV export. Bounded:
 // when a recording exceeds maxSamples, oldest samples are dropped.
 export class RecordingBuffer {
   private readonly buffers = new Map<string, RecordingSample[]>();

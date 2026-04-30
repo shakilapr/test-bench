@@ -4,24 +4,17 @@ const Schema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().default(3000),
   SQLITE_PATH: z.string().default("./data/bench.sqlite"),
+  // External broker URL. Used only when EMBED_BROKER=false.
   MQTT_URL: z.string().default("mqtt://localhost:1883"),
   MQTT_USER: z.string().optional(),
   MQTT_PASS: z.string().optional(),
-  INFLUX_URL: z.string().default("http://localhost:8086"),
-  INFLUX_TOKEN: z.string().default("dev-token"),
-  INFLUX_ORG: z.string().default("bench"),
-  INFLUX_BUCKET: z.string().default("bench"),
-  GRAFANA_URL: z.string().default("http://localhost:3001"),
-  UI_DIST: z.string().default("../ui/dist"),
+  // Embed an MQTT broker in-process (default). Set to false to use an external broker.
   EMBED_BROKER: z
     .union([z.boolean(), z.string()])
-    .default(false)
-    .transform((v) => v === true || v === "true" || v === "1"),
+    .default(true)
+    .transform((v) => v !== false && v !== "false" && v !== "0"),
   EMBED_BROKER_PORT: z.coerce.number().default(1883),
-  INFLUX_DISABLED: z
-    .union([z.boolean(), z.string()])
-    .default(false)
-    .transform((v) => v === true || v === "true" || v === "1"),
+  UI_DIST: z.string().default("../ui/dist"),
 });
 
 export type Config = z.infer<typeof Schema>;

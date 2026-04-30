@@ -3,8 +3,8 @@
  *
  * 1. Start an in-process MQTT broker (aedes) on a random port.
  * 2. Spawn the backend pointed at that broker, with a temp SQLite file and
- *    a deliberately-unreachable Influx URL (Influx writes fail silently in the
- *    background; the control plane and MQTT pipeline still work).
+ *    a deliberately-unreachable Influx URL (no longer needed; left here for
+ *    historical context — backend has no Influx coupling now).
  * 3. Spawn the simulator pointed at that broker.
  * 4. Poll /api/devices until bench-sim-01 appears online.
  * 5. Issue a set_sample_interval command and assert it reaches `completed`.
@@ -108,7 +108,7 @@ async function main() {
       NODE_ENV: "development",
       PORT: "3000",
       MQTT_URL: mqttUrl,
-      INFLUX_URL: "http://127.0.0.1:1",
+      EMBED_BROKER: "false",
       SQLITE_PATH: sqlitePath,
     },
   }), "backend");

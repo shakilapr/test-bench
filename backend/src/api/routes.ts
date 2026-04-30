@@ -13,7 +13,6 @@ export interface ApiDeps {
   commands: CommandRepo;
   dispatcher: Dispatcher;
   buffer: RecordingBuffer;
-  grafanaUrl: string;
 }
 
 export async function registerRoutes(app: FastifyInstance, deps: ApiDeps) {
@@ -77,8 +76,6 @@ export async function registerRoutes(app: FastifyInstance, deps: ApiDeps) {
     const id = (req.params as { id: string }).id;
     return deps.commands.recent(id);
   });
-
-  app.get("/api/grafana-url", async () => ({ url: deps.grafanaUrl }));
 }
 
 function toDeviceDto(row: ReturnType<DeviceRepo["get"]> & object) {

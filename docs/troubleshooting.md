@@ -2,32 +2,31 @@
 
 ## "Device offline" in UI
 
-1. `docker logs bench-mosquitto` -- check broker is up.
-2. `docker exec -it bench-mosquitto mosquitto_sub -t 'bench/#' -v` -- watch for
-   any traffic from the device.
-3. Confirm the device's NVS provisioning matches the broker host/port.
-4. If you see the retained `online:false` LWT but no follow-up `online:true`,
+1. Confirm the embedded broker started — backend logs `[mqtt] embedded broker
+   listening on :1883` on startup.
+2. Confirm the simulator (or the device firmware) is configured for
+   `mqtt://<backend-host>:1883`. The simulator picks this up via `MQTT_URL`.
+3. If you see the retained `online:false` LWT but no follow-up `online:true`,
    the device is reaching the broker but disconnecting before publishing
-   status -- check Wi-Fi RSSI.
+   status — check Wi-Fi signal / power.
 
-## InfluxDB has no points
+## UI says `○ offline` (websocket)
 
-1. `curl http://localhost:8086/health`.
-2. Confirm `INFLUX_TOKEN`, `INFLUX_ORG`, `INFLUX_BUCKET` in `backend/.env`.
-3. Tail backend logs for `influx write failed`.
-4. Verify Grafana data source provisioning under Settings -> Data sources.
+1. Confirm the backend is running on port 3000 and `/api/health` returns ok.
+2. The vite proxy targets `127.0.0.1:3000` — Windows can resolve `localhost`
+   to IPv6 first which fails against an IPv4-only server.
 
 ## Commands stuck in `issued`
 
 The backend marks a command `timed_out` after 5 s if no terminal ack arrives.
-If you see commands stuck:
 
-1. Confirm device is subscribed: broker logs should show `Sending PUBLISH to ...`.
-2. Confirm dispatcher saw the ack: backend log line `command <id> -> <status>`.
-3. Re-issue the command -- the device dedupe ring keeps the last 16 ids and
+1. Confirm the device is subscribed to its command topic.
+2. Look for `command <id> -> <status>` in the backend log.
+3. Re-issue the command — the device dedupe ring keeps the last 16 ids and
    will return `duplicate` for a re-send of the same id.
 
-## UI shows blank Grafana panel
+## CSV export is empty
 
-Open the iframe URL directly in a new tab. If Grafana asks for login,
-anonymous access provisioning failed; recheck `infra/grafana/provisioning`.
+Recordings buffer telemetry only while a recording is active. If the device
+sent samples before you hit Start, those are not in the export. The buffer is
+in-memory and resets on backend restart.

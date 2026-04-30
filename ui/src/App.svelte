@@ -1,22 +1,20 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import {
-    devices, selectedDeviceId, selectedDevice, liveReadings, grafanaUrl, wsConnected,
-    activeRecording, refreshDevices, refreshGrafanaUrl, refreshRecordings,
+    devices, selectedDeviceId, selectedDevice, liveReadings, wsConnected,
+    activeRecording, refreshDevices, refreshRecordings,
   } from "./lib/stores.js";
   import { WsClient } from "./lib/ws.js";
   import DeviceList from "./lib/DeviceList.svelte";
   import LiveCard from "./lib/LiveCard.svelte";
   import CommandPanel from "./lib/CommandPanel.svelte";
   import RecordingPanel from "./lib/RecordingPanel.svelte";
-  import GrafanaPanel from "./lib/GrafanaPanel.svelte";
 
   let ws: WsClient | null = null;
   let busy = false;
 
   onMount(() => {
     refreshDevices();
-    refreshGrafanaUrl();
     ws = new WsClient();
     ws.start();
     return () => ws?.stop();
@@ -89,7 +87,6 @@
         <CommandPanel device={dev} />
         <RecordingPanel device={dev} />
       </div>
-      <GrafanaPanel url={$grafanaUrl} deviceId={dev.device_id} />
     {:else}
       <p class="muted">No device selected. Bring one online or pick from the sidebar.</p>
     {/if}

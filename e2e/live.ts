@@ -52,10 +52,9 @@ async function main() {
       NODE_ENV: "production",
       PORT: String(HTTP_PORT),
       MQTT_URL: `mqtt://127.0.0.1:${MQTT_PORT}`,
-      INFLUX_URL: "http://127.0.0.1:1",
+      EMBED_BROKER: "false",
       SQLITE_PATH: sqlitePath,
       UI_DIST: resolve(REPO, "ui", "dist"),
-      GRAFANA_URL: "http://localhost:3001",
     },
   }), "backend");
 

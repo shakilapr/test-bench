@@ -32,7 +32,6 @@ export const liveReadings = writable<Record<string, Reading>>({});
 // Per-device, per-channel ring of recent values for sparklines.
 export const recentReadings = writable<Record<string, Record<string, number[]>>>({});
 export const wsConnected = writable(false);
-export const grafanaUrl = writable<string | null>(null);
 export const recordings = writable<Record<string, RecordingRow[]>>({});
 export const activeRecording = writable<Record<string, RecordingRow | null>>({});
 
@@ -45,14 +44,6 @@ export async function refreshDevices() {
     const list: DeviceDto[] = await r.json();
     devices.set(list);
     if (!get(selectedDeviceId) && list[0]) selectedDeviceId.set(list[0].device_id);
-  }
-}
-
-export async function refreshGrafanaUrl() {
-  const r = await fetch("/api/grafana-url");
-  if (r.ok) {
-    const j = await r.json();
-    grafanaUrl.set(j.url ?? null);
   }
 }
 
