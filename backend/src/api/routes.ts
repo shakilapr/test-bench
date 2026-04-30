@@ -4,6 +4,7 @@ import type { RecordingRepo } from "../db/recordings.js";
 import type { CommandRepo } from "../db/commands.js";
 import type { Dispatcher } from "../commands/dispatcher.js";
 import type { RecordingBuffer } from "../recordings/buffer.js";
+import type { SimController } from "../sim/controller.js";
 import { toCsv } from "../recordings/buffer.js";
 import { validateParams } from "../commands/registry.js";
 
@@ -13,10 +14,26 @@ export interface ApiDeps {
   commands: CommandRepo;
   dispatcher: Dispatcher;
   buffer: RecordingBuffer;
+  sim?: SimController;
 }
 
 export async function registerRoutes(app: FastifyInstance, deps: ApiDeps) {
   app.get("/api/health", async () => ({ ok: true, ts: Date.now() }));
+
+  if (deps.sim) {
+    const sim = deps.sim;
+    app.get("/api/sim/status", async () => sim.status());
+    app.post("/api/sim/start", async (req, reply) => {
+      const body = (req.body ?? {}) as { device_id?: string };
+      const r = sim.start(body.device_id);
+      if (!r.ok) return reply.code(500).send({ error: r.error ?? "start failed" });
+      return sim.status();
+    });
+    app.post("/api/sim/stop", async () => {
+      sim.stop();
+      return sim.status();
+    });
+  }
 
   app.get("/api/devices", async () => deps.devices.list().map(toDeviceDto));
 

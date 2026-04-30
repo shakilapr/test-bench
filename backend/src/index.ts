@@ -16,6 +16,7 @@ import { RecordingBuffer } from "./recordings/buffer.js";
 import { wirePipeline } from "./pipeline.js";
 import { registerRoutes } from "./api/routes.js";
 import { registerWebsocket } from "./ws/socket.js";
+import { SimController } from "./sim/controller.js";
 
 async function main() {
   const cfg = loadConfig();
@@ -41,12 +42,15 @@ async function main() {
     bus
   );
   const dispatcher = new Dispatcher(broker, commands, bus);
+  const sim = new SimController({
+    mqttUrl: cfg.EMBED_BROKER ? `mqtt://127.0.0.1:${cfg.EMBED_BROKER_PORT}` : cfg.MQTT_URL,
+  });
   wirePipeline({ bus, devices, recordings, buffer });
   await broker.start();
 
   const app = Fastify({ logger: { level: cfg.NODE_ENV === "production" ? "info" : "debug" } });
   await app.register(fastifyWebsocket);
-  await registerRoutes(app, { devices, recordings, commands, dispatcher, buffer });
+  await registerRoutes(app, { devices, recordings, commands, dispatcher, buffer, sim });
   await registerWebsocket(app, bus);
 
   if (cfg.NODE_ENV === "production") {
@@ -65,6 +69,7 @@ async function main() {
 
   const close = async () => {
     console.log("[backend] shutting down");
+    await sim.stopAndWait();
     await app.close();
     await broker.stop();
     if (embedded) await embedded.stop();

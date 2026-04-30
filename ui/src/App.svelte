@@ -9,6 +9,7 @@
   import LivePanel from "./lib/LivePanel.svelte";
   import CommandPanel from "./lib/CommandPanel.svelte";
   import RecordingPanel from "./lib/RecordingPanel.svelte";
+  import SimButton from "./lib/SimButton.svelte";
 
   let ws: WsClient | null = null;
 
@@ -32,6 +33,7 @@
       </span>
     </div>
     <DeviceList items={$devices} />
+    <div class="sim-slot"><SimButton /></div>
   </aside>
 
   <header class="topbar">
@@ -121,4 +123,8 @@
     .main .row { grid-template-columns: 1fr; }
   }
   .muted { color: #888; }
+  .sim-slot {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid #222;
+  }
 </style>
