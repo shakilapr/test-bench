@@ -34,7 +34,6 @@ input, select {
   background: var(--panel);
   border-radius: 6px;
   padding: 1rem;
-  margin: 0.5rem 0;
 }
 .status-online { color: var(--ok); }
 .status-offline { color: var(--err); }

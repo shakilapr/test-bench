@@ -4,10 +4,15 @@
   $: src = url ? `${url}/d/bench-live?orgId=1&kiosk=tv&theme=dark&var-device_id=${encodeURIComponent(deviceId)}` : null;
 </script>
 
-<section class="card" style="height:400px;padding:0">
-  {#if src}
-    <iframe src={src} style="width:100%;height:100%;border:0;border-radius:6px" title="Grafana"></iframe>
-  {:else}
-    <p style="padding:1rem;color:#888">Grafana URL not configured.</p>
-  {/if}
-</section>
+{#if src}
+  <details class="card grafana">
+    <summary>Grafana dashboard</summary>
+    <iframe {src} title="Grafana"></iframe>
+  </details>
+{/if}
+
+<style>
+  .grafana { padding: 0.75rem; }
+  .grafana summary { cursor: pointer; color: var(--accent); font-weight: 500; }
+  .grafana iframe { width: 100%; height: 420px; border: 0; border-radius: 6px; margin-top: 0.5rem; }
+</style>

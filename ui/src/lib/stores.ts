@@ -16,11 +16,25 @@ export interface Reading {
   quality: Record<string, number>;
 }
 
+export interface RecordingRow {
+  recording_id: string;
+  device_id: string;
+  label: string | null;
+  started_at: number;
+  ended_at: number | null;
+  sample_count?: number;
+}
+
+export const SPARK_WINDOW = 120;
+
 export const devices = writable<DeviceDto[]>([]);
 export const liveReadings = writable<Record<string, Reading>>({});
-export const recordings = writable<Record<string, any>>({});
+// Per-device, per-channel ring of recent values for sparklines.
+export const recentReadings = writable<Record<string, Record<string, number[]>>>({});
 export const wsConnected = writable(false);
 export const grafanaUrl = writable<string | null>(null);
+export const recordings = writable<Record<string, RecordingRow[]>>({});
+export const activeRecording = writable<Record<string, RecordingRow | null>>({});
 
 export const selectedDeviceId = writable<string | null>(null);
 export const selectedDevice = derived([devices, selectedDeviceId], ([$d, $id]) => $d.find((x) => x.device_id === $id) ?? null);
@@ -42,14 +56,35 @@ export async function refreshGrafanaUrl() {
   }
 }
 
+export async function refreshRecordings(deviceId: string) {
+  const r = await fetch(`/api/devices/${deviceId}/recordings`);
+  if (!r.ok) return;
+  const list: RecordingRow[] = await r.json();
+  recordings.update((m) => ({ ...m, [deviceId]: list }));
+  const act = list.find((x) => !x.ended_at) ?? null;
+  activeRecording.update((m) => ({ ...m, [deviceId]: act }));
+}
+
 export function applyTelemetry(t: any) {
+  const ts = Date.now();
   liveReadings.update((cur) => {
     cur[t.device_id] = {
       device_id: t.device_id,
-      ts: Date.now(),
+      ts,
       readings: t.readings ?? {},
       quality: t.quality ?? {},
     };
+    return cur;
+  });
+  recentReadings.update((cur) => {
+    const d = cur[t.device_id] ?? {};
+    for (const [k, v] of Object.entries(t.readings ?? {})) {
+      const arr = d[k] ?? [];
+      arr.push(v as number);
+      if (arr.length > SPARK_WINDOW) arr.splice(0, arr.length - SPARK_WINDOW);
+      d[k] = arr;
+    }
+    cur[t.device_id] = d;
     return cur;
   });
 }

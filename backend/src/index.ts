@@ -14,6 +14,7 @@ import { NoopInfluxWriter, type IInfluxWriter } from "./influx/noop.js";
 import { startEmbeddedBroker, type EmbeddedBroker } from "./mqtt/embedded.js";
 import { MqttBroker } from "./mqtt/broker.js";
 import { Dispatcher } from "./commands/dispatcher.js";
+import { RecordingBuffer } from "./recordings/buffer.js";
 import { wirePipeline } from "./pipeline.js";
 import { registerRoutes } from "./api/routes.js";
 import { registerWebsocket } from "./ws/socket.js";
@@ -25,6 +26,7 @@ async function main() {
   const devices = new DeviceRepo(db);
   const recordings = new RecordingRepo(db);
   const commands = new CommandRepo(db);
+  const buffer = new RecordingBuffer();
   const influx: IInfluxWriter = cfg.INFLUX_DISABLED
     ? new NoopInfluxWriter()
     : new InfluxWriter({
@@ -45,12 +47,12 @@ async function main() {
     bus
   );
   const dispatcher = new Dispatcher(broker, commands, bus);
-  wirePipeline({ bus, devices, recordings, influx });
+  wirePipeline({ bus, devices, recordings, influx, buffer });
   await broker.start();
 
   const app = Fastify({ logger: { level: cfg.NODE_ENV === "production" ? "info" : "debug" } });
   await app.register(fastifyWebsocket);
-  await registerRoutes(app, { devices, recordings, commands, dispatcher, grafanaUrl: cfg.GRAFANA_URL });
+  await registerRoutes(app, { devices, recordings, commands, dispatcher, buffer, grafanaUrl: cfg.GRAFANA_URL });
   await registerWebsocket(app, bus);
 
   if (cfg.NODE_ENV === "production") {
