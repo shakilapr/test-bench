@@ -1003,6 +1003,45 @@ Flash and monitor with PlatformIO as normal. The backend and UI are independent.
 pio run --target upload
 pio device monitor
 ```
+## Connectivity
+
+Devices live on flaky lab Wi-Fi. The firmware never serves any HTTP/web UI of
+its own — it is purely an MQTT publisher/subscriber. All operator
+interaction happens through the backend's UI; the device only speaks the
+five `bench/<device_id>/{status,meta,telemetry,ack,cmd}` topics.
+
+Reconnection strategy (see `firmware/src/NetworkManager.cpp`):
+
+1. **Independent backoff for each layer.** Wi-Fi and MQTT each track their
+   own next-attempt timestamp + current delay. Sharing one timer (the
+   pre-MVP code) caused either layer to silently starve the other after a
+   broker outage.
+2. **Exponential backoff with jitter.** Initial delay `1 s`, doubles per
+   failure, capped at `30 s`, plus up to `500 ms` of random jitter. A fleet
+   coming back from a broker outage doesn't reconnect in lockstep.
+3. **Last-Will-and-Testament.** On MQTT connect we register a retained LWT
+   on `bench/<id>/status` so the broker publishes `{online:false}` if the
+   device disappears uncleanly. The backend's `DeviceWatcher` plus the LWT
+   together drive the UI's online dot.
+4. **Soft watchdog.** If `WiFi.status()==WL_CONNECTED && mqtt_.connected()`
+   stays false for `kConnectivityRebootMs` (default 10 minutes), the device
+   calls `ESP.restart()`. Picks the unit up from kernel-stack states the
+   reconnect loop alone can't escape (DHCP wedged, AP firmware bug, radio
+   driver panic).
+5. **No SoftAP / captive portal.** Provisioning is over USB serial only
+   (`tools/provisioning`). Removing the captive-portal path keeps the
+   firmware small and keeps the device off the air when it has no creds.
+
+Operator-side connectivity checks:
+
+- `mosquitto_sub -t 'bench/+/status' -v` — see retained online state for
+  every known device. The `chaos/` harness uses this to assert the device
+  recovers from a forced broker restart.
+- Backend exposes `/api/health` and `/api/devices` (last_seen + last_status)
+  for liveness/readiness probes from any external monitor.
+- The UI's header `● live` indicator reflects backend WS connectivity, not
+  device connectivity; per-device online state is shown next to its card.
+
 ## Failure Points
 
 MVP failure points:

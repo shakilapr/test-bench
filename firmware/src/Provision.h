@@ -4,9 +4,9 @@
 #include <Preferences.h>
 
 // Reads/writes Wi-Fi + MQTT + device_id from NVS. Secrets never live in
-// Config.h or in source control. If NVS is empty on boot the device falls
-// back to a SoftAP captive page (provisioning UI) -- not implemented as part
-// of MVP; if absent, the device prints instructions and halts.
+// Config.h or in source control. Provisioning is performed over the serial
+// port (see tools/provisioning); the firmware never serves any HTTP/web
+// interface of its own.
 class Provision {
  public:
   bool load();

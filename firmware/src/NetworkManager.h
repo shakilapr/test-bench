@@ -15,7 +15,8 @@ class NetworkManager {
 
   bool begin(const Provision& prov);
   void loop();
-  bool connected() const { return mqtt_.connected(); }
+  bool connected() { return mqtt_.connected(); }
+  bool online() { return WiFi.status() == WL_CONNECTED && mqtt_.connected(); }
 
   bool publishTelemetry(const char* json, size_t len);
   bool publishStatus(const char* json, size_t len, bool retained);
@@ -30,6 +31,9 @@ class NetworkManager {
   bool ensureWifi();
   bool ensureMqtt();
   void publishOnlineStatus();
+  void onConnectivityRestored();
+  void maybeReboot();
+  static uint32_t nextBackoff(uint32_t prev);
   static void staticOnMessage(char* topic, uint8_t* payload, unsigned int len);
 
   WiFiClient wifi_client_;
@@ -47,6 +51,17 @@ class NetworkManager {
   String topic_ack_;
   String topic_cmd_;
   String client_id_;
-  unsigned long next_reconnect_ms_ = 0;
+
+  // Independent backoff state for each layer (Wi-Fi vs MQTT). Sharing one
+  // timer caused either layer to silently starve the other after an outage.
+  uint32_t wifi_next_attempt_ms_ = 0;
+  uint32_t wifi_backoff_ms_      = 0;
+  uint32_t mqtt_next_attempt_ms_ = 0;
+  uint32_t mqtt_backoff_ms_      = 0;
+
+  // Watchdog: timestamp of last fully-online moment, used to reboot the
+  // device when connectivity is dead for too long.
+  uint32_t last_online_ms_ = 0;
+
   CommandHandler handler_;
 };

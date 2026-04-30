@@ -36,6 +36,8 @@ bool NetworkManager::begin(const Provision& prov) {
   buildTopics();
 
   WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(false);
   WiFi.setHostname(client_id_.c_str());
   WiFi.begin(wifi_ssid_.c_str(), wifi_pass_.c_str());
 
@@ -46,6 +48,8 @@ bool NetworkManager::begin(const Provision& prov) {
   mqtt_.setCallback(&NetworkManager::staticOnMessage);
 
   if (Config::kEnableMdns) MDNS.begin(Config::kMdnsHostname);
+
+  last_online_ms_ = millis();
   return true;
 }
 
@@ -61,23 +65,44 @@ void NetworkManager::loop() {
   ensureWifi();
   ensureMqtt();
   if (mqtt_.connected()) mqtt_.loop();
+  if (online()) {
+    last_online_ms_ = millis();
+  } else {
+    maybeReboot();
+  }
+}
+
+uint32_t NetworkManager::nextBackoff(uint32_t prev) {
+  uint32_t base = prev == 0 ? Config::kReconnectInitialDelayMs : prev * 2;
+  if (base > Config::kReconnectMaxDelayMs) base = Config::kReconnectMaxDelayMs;
+  return base + (uint32_t)random(0, Config::kReconnectJitterMs + 1);
 }
 
 bool NetworkManager::ensureWifi() {
-  if (WiFi.status() == WL_CONNECTED) return true;
-  unsigned long now = millis();
-  if (now < next_reconnect_ms_) return false;
-  next_reconnect_ms_ = now + 2000;
-  WiFi.reconnect();
+  if (WiFi.status() == WL_CONNECTED) {
+    wifi_backoff_ms_ = 0;
+    return true;
+  }
+  uint32_t now = millis();
+  if (now < wifi_next_attempt_ms_) return false;
+  wifi_backoff_ms_ = nextBackoff(wifi_backoff_ms_);
+  wifi_next_attempt_ms_ = now + wifi_backoff_ms_;
+  Serial.printf("[net] wifi reconnecting (next attempt in %ums)\n", wifi_backoff_ms_);
+  WiFi.disconnect(true, false);
+  WiFi.begin(wifi_ssid_.c_str(), wifi_pass_.c_str());
   return false;
 }
 
 bool NetworkManager::ensureMqtt() {
-  if (mqtt_.connected()) return true;
+  if (mqtt_.connected()) {
+    mqtt_backoff_ms_ = 0;
+    return true;
+  }
   if (WiFi.status() != WL_CONNECTED) return false;
-  unsigned long now = millis();
-  if (now < next_reconnect_ms_) return false;
-  next_reconnect_ms_ = now + 2000;
+  uint32_t now = millis();
+  if (now < mqtt_next_attempt_ms_) return false;
+  mqtt_backoff_ms_ = nextBackoff(mqtt_backoff_ms_);
+  mqtt_next_attempt_ms_ = now + mqtt_backoff_ms_;
 
   String lwt = String("{\"v\":1,\"device_id\":\"") + device_id_ + "\",\"online\":false}";
 
@@ -85,11 +110,28 @@ bool NetworkManager::ensureMqtt() {
                           mqtt_user_.length() ? mqtt_user_.c_str() : nullptr,
                           mqtt_pass_.length() ? mqtt_pass_.c_str() : nullptr,
                           topic_status_.c_str(), 1, true, lwt.c_str());
-  if (!ok) return false;
+  if (!ok) {
+    Serial.printf("[net] mqtt connect rc=%d (next attempt in %ums)\n",
+                  mqtt_.state(), mqtt_backoff_ms_);
+    return false;
+  }
 
+  onConnectivityRestored();
+  return true;
+}
+
+void NetworkManager::onConnectivityRestored() {
+  Serial.println("[net] mqtt connected");
   publishOnlineStatus();
   mqtt_.subscribe(topic_cmd_.c_str(), 1);
-  return true;
+}
+
+void NetworkManager::maybeReboot() {
+  uint32_t now = millis();
+  if (now - last_online_ms_ < Config::kConnectivityRebootMs) return;
+  Serial.println("[net] connectivity dead for too long, rebooting");
+  delay(50);
+  ESP.restart();
 }
 
 void NetworkManager::publishOnlineStatus() {
