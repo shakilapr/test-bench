@@ -20,6 +20,7 @@
     "start": "cross-env NODE_ENV=production npm --workspace backend run start",
     "test": "npm --workspace backend test && npm --workspace ui test && npm --workspace simulator test",
     "test:e2e": "npm --workspace e2e run e2e",
+    "test:ui-e2e": "npm --workspace ui run test:e2e",
     "test:firmware": "pio test -e native --project-dir firmware",
     "build:firmware": "pio run --project-dir firmware"
   },
