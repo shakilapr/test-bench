@@ -20,12 +20,19 @@ void TelemetryPublisher::publishMetadata(uint32_t metadata_version) {
     {"current_a", 1, "sensor fault"},
     {"motor_rpm", 1, "sensor fault"},
   };
+  const bench::CommandParamMeta sample_interval_params[1] = {
+    {"interval_ms", "number", 100, 10000},
+  };
+  const bench::CommandMeta commands[1] = {
+    {"set_sample_interval", "Sample Interval", sample_interval_params, 1},
+  };
   char buf[768];
   size_t n = bench::buildMetadataJson(buf, sizeof(buf),
                                       net_.deviceId().c_str(),
                                       metadata_version,
                                       channels, 3,
-                                      qcodes, 2);
+                                      qcodes, 2,
+                                      commands, 1);
   if (n > 0) net_.publishMeta(buf, n);
 }
 

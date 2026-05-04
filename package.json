@@ -10,11 +10,15 @@
     "e2e"
   ],
   "scripts": {
+    "predev": "node scripts/check-native-deps.mjs",
     "dev": "concurrently -n be,sim,ui -c blue,green,magenta \"npm:dev:backend\" \"npm:dev:sim\" \"npm:dev:ui\"",
+    "predev:real": "node scripts/check-native-deps.mjs",
     "dev:real": "concurrently -n be,ui -c blue,magenta \"npm:dev:backend\" \"npm:dev:ui\"",
     "dev:backend": "cross-env NODE_ENV=development PORT=3000 npm --workspace backend run dev",
     "dev:sim": "wait-on tcp:1883 && npm --workspace simulator run sim",
     "dev:ui": "npm --workspace ui run dev",
+    "deps:check": "node scripts/check-native-deps.mjs",
+    "deps:reset": "node scripts/reset-node-modules.mjs",
     "build:ui": "npm --workspace ui run build",
     "build:backend": "npm --workspace backend run build",
     "build": "npm run build:ui && npm run build:backend",

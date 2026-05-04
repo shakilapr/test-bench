@@ -52,14 +52,29 @@ struct QualityCode {
   const char* label;
 };
 
+struct CommandParamMeta {
+  const char* key;
+  const char* type;
+  int min;
+  int max;
+};
+
+struct CommandMeta {
+  const char* type;
+  const char* label;
+  const CommandParamMeta* params;
+  size_t n_params;
+};
+
 // Serializes a v=1 metadata payload that conforms to the backend
 // MetadataSchema. `kind` on each channel is required.
-// quality_codes may be nullptr (n_qcodes=0) to omit them.
+// quality_codes or commands may be nullptr to omit them.
 size_t buildMetadataJson(char* out, size_t out_len,
                          const char* device_id,
                          uint32_t metadata_version,
                          const ChannelMeta* channels, size_t n_channels,
-                         const QualityCode* qcodes = nullptr, size_t n_qcodes = 0);
+                         const QualityCode* qcodes = nullptr, size_t n_qcodes = 0,
+                         const CommandMeta* commands = nullptr, size_t n_commands = 0);
 
 struct CommandIn {
   char cmd_id[64];

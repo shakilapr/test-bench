@@ -53,7 +53,8 @@ size_t buildMetadataJson(char* out, size_t out_len,
                          const char* device_id,
                          uint32_t metadata_version,
                          const ChannelMeta* channels, size_t n_channels,
-                         const QualityCode* qcodes, size_t n_qcodes) {
+                         const QualityCode* qcodes, size_t n_qcodes,
+                         const CommandMeta* commands, size_t n_commands) {
   JsonDocument doc;
   doc["v"] = 1;
   doc["device_id"] = device_id;
@@ -76,6 +77,25 @@ size_t buildMetadataJson(char* out, size_t out_len,
       char code_str[8];
       snprintf(code_str, sizeof(code_str), "%d", qcodes[i].code);
       qobj[qcodes[i].channel_key][code_str] = qcodes[i].label;
+    }
+  }
+  if (n_commands > 0 && commands) {
+    JsonArray carr = doc["commands"].to<JsonArray>();
+    for (size_t i = 0; i < n_commands; ++i) {
+      const CommandMeta& cmd = commands[i];
+      JsonObject c = carr.add<JsonObject>();
+      c["type"] = cmd.type;
+      if (cmd.label && *cmd.label) c["label"] = cmd.label;
+      if (cmd.n_params > 0 && cmd.params) {
+        JsonObject pobj = c["params"].to<JsonObject>();
+        for (size_t j = 0; j < cmd.n_params; ++j) {
+          const CommandParamMeta& param = cmd.params[j];
+          JsonObject p = pobj[param.key].to<JsonObject>();
+          p["type"] = param.type;
+          p["min"] = param.min;
+          p["max"] = param.max;
+        }
+      }
     }
   }
   size_t written = serializeJson(doc, out, out_len);

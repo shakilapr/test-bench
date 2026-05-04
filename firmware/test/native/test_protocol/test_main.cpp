@@ -48,9 +48,17 @@ void test_buildMetadataJson_includes_kind() {
     {"current_a",   "Shunt current",         "A", "measurement", 2, true, true},
     {"chip_temp_c", "Chip Temp",  "C", "health",      1, true, true},
   };
+  CommandParamMeta params[1] = {
+    {"interval_ms", "number", 100, 10000},
+  };
+  CommandMeta commands[1] = {
+    {"set_sample_interval", "Sample Interval", params, 1},
+  };
   char buf[512];
   size_t n = buildMetadataJson(buf, sizeof(buf), "bench-01",
-                               /*metadata_version=*/3, ch, 2);
+                               /*metadata_version=*/3, ch, 2,
+                               /*qcodes=*/nullptr, /*n_qcodes=*/0,
+                               commands, 1);
   TEST_ASSERT_TRUE(n > 0);
   TEST_ASSERT_NOT_NULL(strstr(buf, "\"v\":1"));
   TEST_ASSERT_NOT_NULL(strstr(buf, "\"device_id\":\"bench-01\""));
@@ -61,6 +69,12 @@ void test_buildMetadataJson_includes_kind() {
   // Backend MetadataSchema requires `kind` on every channel.
   TEST_ASSERT_NOT_NULL(strstr(buf, "\"kind\":\"measurement\""));
   TEST_ASSERT_NOT_NULL(strstr(buf, "\"kind\":\"health\""));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"commands\""));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"type\":\"set_sample_interval\""));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"label\":\"Sample Interval\""));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"interval_ms\""));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"min\":100"));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"max\":10000"));
 }
 
 void test_buildTelemetryJson_shape() {

@@ -23,7 +23,7 @@ live in an in-memory ring buffer and are exported as CSV.
 
 ## Quick start (no Docker, no hardware)
 
-```powershell
+```sh
 npm install
 npm run dev
 ```
@@ -31,9 +31,21 @@ npm run dev
 This boots the backend (with embedded broker on `:1883`), the simulator, and
 the Vite dev server. Open <http://localhost:5173>.
 
+If you switch the same checkout between Windows and Linux/WSL, reset native
+Node packages before reinstalling on the new OS:
+
+```sh
+npm run deps:reset
+npm install
+npm run dev
+```
+
+That keeps platform-specific packages such as Rollup, esbuild, and
+better-sqlite3 from reusing binaries built for the other OS.
+
 ## Production-style single port
 
-```powershell
+```sh
 npm run build
 npm start
 ```
@@ -44,7 +56,7 @@ HTTP, one port for MQTT.
 
 ## Tests
 
-```powershell
+```sh
 npm test                # backend + ui + simulator unit tests
 npm run test:e2e        # in-process broker + backend + sim, asserts roundtrip
 npm run test:firmware   # PlatformIO native unit tests (requires PlatformIO)
@@ -52,27 +64,74 @@ npm run test:firmware   # PlatformIO native unit tests (requires PlatformIO)
 
 ## Connect a real ESP32
 
-1. Copy `firmware/secrets.example.json` to `firmware/secrets.json` and fill in
-   your Wi-Fi SSID/password, the laptop/server IP that runs the backend
-   (`mqtt://<pc-ip>:1883`), and a `device_id`. `secrets.json` is gitignored.
-   The PlatformIO pre-build hook (`firmware/scripts/secrets_to_defines.py`)
-   bakes those values into the binary so the board self-provisions NVS on
-   first boot — no serial provisioning step required.
-2. Build & upload:
+1. Copy `firmware/secrets.example.json` to `firmware/secrets.json` and set:
+
+   ```json
+   {
+     "device_id": "bench-01",
+     "wifi_ssid": "NITRO",
+     "wifi_pass": "11110000",
+     "mqtt_url": "mqtt://<pc-ip>:1883"
+   }
+   ```
+
+   Use the Linux/WSL host IP that runs the backend for `<pc-ip>`.
+   `secrets.json` is gitignored. Wi-Fi reference:
+
+   ```sh
+   # Previous local values, kept only as a comment/reference:
+   # wifi_ssid=BlackPearl
+   # wifi_pass=98765432
+
+   wifi_ssid=NITRO
+   wifi_pass=11110000
+   ```
+
+   The PlatformIO pre-build hook
+   (`firmware/scripts/secrets_to_defines.py`) bakes these values into the
+   binary so the board self-provisions NVS on first boot.
+2. Build and upload from Linux:
+
+   ```sh
+   pio run --project-dir firmware -t upload
+   ```
+
+   The active PlatformIO serial settings are Linux ports:
+
+   ```ini
+   upload_port = /dev/ttyUSB0
+   monitor_port = /dev/ttyUSB0
+   ```
+
+   If the board appears as another Linux port, check it with
+   `pio device list` and update `firmware/platformio.ini`.
+
+   Windows still works. Leave the Linux ports active for this checkout, or
+   temporarily switch the commented Windows settings in
+   `firmware/platformio.ini` when flashing from Windows:
+
+   ```ini
+   ; upload_port = COM5
+   ; monitor_port = COM5
+   ```
+
+   Windows upload command, from PowerShell, is still the same:
 
    ```powershell
-   pio run --project-dir firmware -t upload
+   # pio run --project-dir firmware -t upload
    ```
 
 3. Run backend + UI without the simulator (so the live readings come from
    the real board, not synthetic data):
 
-   ```powershell
+   ```sh
    npm run dev:real
    ```
 
-   Open <http://localhost:5173>. The board appears in the sidebar as soon as
-   its retained `online` status reaches the embedded broker.
+   Open the real-device UI at <http://localhost:5173>. The backend listens on
+   <http://localhost:3000>, and the embedded MQTT broker listens on `:1883`.
+   The board appears in the sidebar as soon as its retained `online` status
+   reaches the embedded broker.
 
 If you don't want compile-time secrets, leave `secrets.json` absent and the
 firmware will wait for a `PROVISION {json}` line on the serial console
