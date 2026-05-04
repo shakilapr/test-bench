@@ -3,6 +3,7 @@ import { get } from "svelte/store";
 import {
   appendSample, filterByWindow, windowMsFor, WINDOWS,
   recentSamples, applyTelemetry, resetSamples, chartWindow,
+  toggleChartSelection, isSimDevice,
 } from "./stores.js";
 
 describe("appendSample", () => {
@@ -137,5 +138,52 @@ describe("chartWindow store", () => {
     expect(localStorage.getItem("bench.chartWindow")).toBe("10m");
     chartWindow.set("All");
     expect(localStorage.getItem("bench.chartWindow")).toBe("All");
+  });
+});
+
+describe("toggleChartSelection", () => {
+  it("plain click replaces the selection with a single key", () => {
+    const next = toggleChartSelection(new Set(["a", "b"]), "c", false);
+    expect([...next]).toEqual(["c"]);
+  });
+  it("ctrl-click adds a new key to the selection", () => {
+    const next = toggleChartSelection(new Set(["a"]), "b", true);
+    expect([...next].sort()).toEqual(["a", "b"]);
+  });
+  it("ctrl-click on a selected key removes it when others remain", () => {
+    const next = toggleChartSelection(new Set(["a", "b"]), "a", true);
+    expect([...next]).toEqual(["b"]);
+  });
+  it("ctrl-click on the only selected key is a no-op (always >=1)", () => {
+    const next = toggleChartSelection(new Set(["a"]), "a", true);
+    expect([...next]).toEqual(["a"]);
+  });
+  it("returns a new Set instance (no mutation of input)", () => {
+    const input = new Set(["a"]);
+    const next = toggleChartSelection(input, "b", true);
+    expect(next).not.toBe(input);
+    expect([...input]).toEqual(["a"]);
+  });
+});
+
+describe("isSimDevice", () => {
+  const dev = (id: string, meta: any = null): any => ({
+    device_id: id, last_status: "online", last_seen: 0, last_boot_id: null,
+    metadata_version: 1, metadata: meta,
+  });
+  it("returns true when metadata.simulator is true", () => {
+    expect(isSimDevice(dev("anything", { simulator: true }))).toBe(true);
+  });
+  it("falls back to id prefix when metadata flag is missing", () => {
+    expect(isSimDevice(dev("bench-sim-01"))).toBe(true);
+    expect(isSimDevice(dev("bench-sim-99", {}))).toBe(true);
+  });
+  it("returns false for real devices without the flag", () => {
+    expect(isSimDevice(dev("bench-01"))).toBe(false);
+    expect(isSimDevice(dev("bench-01", { simulator: false }))).toBe(false);
+  });
+  it("returns false for null/undefined", () => {
+    expect(isSimDevice(null)).toBe(false);
+    expect(isSimDevice(undefined)).toBe(false);
   });
 });

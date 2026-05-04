@@ -40,7 +40,8 @@ describe("buildTelemetry", () => {
 describe("buildMetadata", () => {
   it("includes channels, commands, and quality_codes", () => {
     const m = buildMetadata("bench-sim-01");
-    expect(m.metadata_version).toBe(2);
+    expect(m.metadata_version).toBe(3);
+    expect(m.simulator).toBe(true);
     expect(m.channels.map((c) => c.key)).toContain("current_a");
     expect(m.channels.map((c) => c.key)).toContain("motor_rpm");
     expect(m.commands.map((c) => c.type)).toContain("set_sample_interval");

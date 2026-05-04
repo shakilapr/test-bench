@@ -74,7 +74,18 @@ export async function refreshDevices() {
   if (r.ok) {
     const list: DeviceDto[] = await r.json();
     devices.set(list);
-    if (!get(selectedDeviceId) && list[0]) selectedDeviceId.set(list[0].device_id);
+    if (!get(selectedDeviceId) && list[0]) {
+      // Prefer online devices, then the most recently seen one. Otherwise an
+      // offline real bench can shadow a live simulator just because it sorts
+      // first in the device list.
+      const pick = [...list].sort((a, b) => {
+        const ao = a.last_status === "online" ? 1 : 0;
+        const bo = b.last_status === "online" ? 1 : 0;
+        if (ao !== bo) return bo - ao;
+        return (b.last_seen ?? 0) - (a.last_seen ?? 0);
+      })[0];
+      selectedDeviceId.set(pick.device_id);
+    }
   }
 }
 
@@ -155,4 +166,32 @@ export function filterByWindow<T extends { ts: number }>(
 export function windowMsFor(label: string): number | null {
   const w = WINDOWS.find((x) => x.label === label);
   return w ? w.ms : 60_000;
+}
+
+// Pure helper: returns the next chart-tab selection set when a tab is clicked.
+// `multi` is true on Ctrl/Cmd-click — toggles the tab in/out of the set, but
+// always keeps at least one tab selected (clicking the only selected tab with
+// Ctrl is a no-op so the chart is never empty). Plain click replaces the set
+// with just the clicked key.
+export function toggleChartSelection(
+  current: ReadonlySet<string>,
+  key: string,
+  multi: boolean,
+): Set<string> {
+  if (!multi) return new Set([key]);
+  const next = new Set(current);
+  if (next.has(key)) {
+    if (next.size > 1) next.delete(key);
+  } else {
+    next.add(key);
+  }
+  return next;
+}
+
+// Sim devices are detected by a `simulator: true` flag in metadata, with a
+// fallback to the conventional id prefix for older metadata versions.
+export function isSimDevice(d: DeviceDto | null | undefined): boolean {
+  if (!d) return false;
+  if (d.metadata && d.metadata.simulator === true) return true;
+  return d.device_id.startsWith("bench-sim");
 }

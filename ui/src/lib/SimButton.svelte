@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { selectedDevice, devices, isSimDevice } from "./stores.js";
 
   type SimStatus = {
     running: boolean;
@@ -11,6 +12,18 @@
   let status: SimStatus | null = null;
   let busy = false;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+  // The Sim controls are dev-time tooling and should stay out of the way when
+  // the user is working with a real bench. Keep the button visible if:
+  //   - the simulator is currently running (so it can always be stopped), OR
+  //   - the selected device is the simulator, OR
+  //   - there are no devices yet (initial setup / pure-sim use).
+  // Otherwise — i.e. a real device is selected and sim is idle — hide it so
+  // the button can't be confused with bench controls.
+  $: showSim =
+    (status?.running ?? false) ||
+    isSimDevice($selectedDevice) ||
+    $devices.length === 0;
 
   async function refresh() {
     try {
@@ -41,7 +54,7 @@
   });
 </script>
 
-{#if status}
+{#if status && showSim}
   <button
     class="sim-btn"
     class:running={status.running}

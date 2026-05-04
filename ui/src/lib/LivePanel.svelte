@@ -2,7 +2,7 @@
   import type { DeviceDto, Reading, Sample } from "./stores.js";
   import {
     recentSamples, chartWindow, WINDOWS, windowMsFor,
-    filterByWindow, resetSamples,
+    filterByWindow, resetSamples, toggleChartSelection,
   } from "./stores.js";
   import Chart from "./Chart.svelte";
 
@@ -27,16 +27,38 @@
   // Re-evaluate window slice as samples or window change. Date.now() drifts
   // per-render which is fine for the chart's purposes (~tab refresh rate).
   $: visibleSamples = filterByWindow(allSamples, windowMs, Date.now());
-  $: activeKey = chartable[0]?.key ?? null;
 
-  let selectedKey: string | null = null;
-  $: tabKey = selectedKey && chartable.some((c) => c.key === selectedKey) ? selectedKey : activeKey;
-  $: activeChannel = chartable.find((c) => c.key === tabKey) ?? null;
-  $: chartSamples = activeChannel
-    ? visibleSamples
-        .map((s) => ({ ts: s.ts, v: s.readings[activeChannel!.key] }))
-        .filter((p) => Number.isFinite(p.v))
-    : [];
+  // Set-based tab selection. Plain click → single tab (replaces set).
+  // Ctrl/Cmd-click → toggle that tab in/out of the set, keeping ≥1 selected,
+  // so multiple channels can be overlaid on the same plot for comparison.
+  let selectedKeys: Set<string> = new Set();
+  // Reset selection if device or its channel set changes (defaults to first
+  // chartable channel). Done in a reactive block so swapping devices doesn't
+  // leave stale keys selected.
+  $: {
+    const valid = new Set([...selectedKeys].filter((k) => chartable.some((c) => c.key === k)));
+    if (valid.size === 0 && chartable[0]) valid.add(chartable[0].key);
+    if (valid.size !== selectedKeys.size || [...valid].some((k) => !selectedKeys.has(k))) {
+      selectedKeys = valid;
+    }
+  }
+
+  function colorFor(key: string): string {
+    const i = chartable.findIndex((c) => c.key === key);
+    return COLORS[i >= 0 ? i % COLORS.length : 0];
+  }
+
+  $: activeChannels = chartable.filter((c) => selectedKeys.has(c.key));
+  $: chartSeries = activeChannels.map((c) => ({
+    key: c.key,
+    label: c.label,
+    unit: c.unit,
+    color: colorFor(c.key),
+    precision: c.precision ?? 2,
+    samples: visibleSamples
+      .map((s) => ({ ts: s.ts, v: s.readings[c.key] }))
+      .filter((p) => Number.isFinite(p.v)),
+  }));
 
   function format(v: number | undefined, p = 2): string {
     if (v === undefined || !Number.isFinite(v)) return "—";
@@ -47,9 +69,16 @@
     const codes = meta?.quality_codes?.[channelKey];
     return codes?.[String(code)] ?? "";
   }
-  function colorFor(key: string): string {
-    const i = chartable.findIndex((c) => c.key === key);
-    return COLORS[i >= 0 ? i % COLORS.length : 0];
+  function onTabClick(ev: MouseEvent, key: string) {
+    const multi = ev.ctrlKey || ev.metaKey;
+    selectedKeys = toggleChartSelection(selectedKeys, key, multi);
+  }
+  function onTabKeydown(ev: KeyboardEvent, key: string) {
+    if (ev.key === " " || ev.key === "Enter") {
+      ev.preventDefault();
+      const multi = ev.ctrlKey || ev.metaKey;
+      selectedKeys = toggleChartSelection(selectedKeys, key, multi);
+    }
   }
   function onReset() {
     resetSamples(device.device_id);
@@ -81,16 +110,21 @@
         {#each chartable as ch}
           <button
             role="tab"
-            aria-selected={tabKey === ch.key}
-            class:active={tabKey === ch.key}
-            on:click={() => selectedKey = ch.key}
+            aria-selected={selectedKeys.has(ch.key)}
+            class:active={selectedKeys.has(ch.key)}
+            on:click={(ev) => onTabClick(ev, ch.key)}
+            on:keydown={(ev) => onTabKeydown(ev, ch.key)}
             data-testid="tab-{ch.key}"
             style="--accent: {colorFor(ch.key)}"
+            title="Click to select. Ctrl/Cmd+click to overlay multiple channels."
           >
             <span class="dot"></span>{ch.label}
             <span class="ttu">{ch.unit}</span>
           </button>
         {/each}
+        <span class="hint" title="Hold Ctrl (Cmd on Mac) and click multiple tabs to overlay them on the same chart.">
+          ⌃+click to overlay
+        </span>
       </div>
       <div class="settings">
         <label class="window">
@@ -111,15 +145,8 @@
       </div>
     </div>
 
-    {#if activeChannel}
-      <Chart
-        samples={chartSamples}
-        unit={activeChannel.unit}
-        label={activeChannel.key}
-        color={colorFor(activeChannel.key)}
-        precision={activeChannel.precision ?? 2}
-        height={320}
-      />
+    {#if chartSeries.length > 0}
+      <Chart series={chartSeries} height={320} />
     {/if}
   {/if}
 </section>
@@ -157,7 +184,11 @@
     gap: 1rem; border-bottom: 1px solid #1c232c;
     padding: 0 0.25rem; flex-wrap: wrap;
   }
-  .tabs { display: flex; gap: 0.25rem; }
+  .tabs { display: flex; gap: 0.25rem; align-items: center; flex-wrap: wrap; }
+  .hint {
+    color: #6c7785; font-size: 0.7rem; margin-left: 0.5rem;
+    font-family: ui-monospace, monospace; cursor: help;
+  }
   .tabs button {
     background: transparent;
     border: 0;

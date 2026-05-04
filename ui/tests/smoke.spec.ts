@@ -47,6 +47,29 @@ test.describe("Bench UI — live pipeline", () => {
     await expect(page.getByTestId("tab-chip_temp_c")).toHaveAttribute("aria-selected", "true");
   });
 
+  test("ctrl-click overlays multiple channels on the same plot", async ({ page }) => {
+    await page.goto("/");
+    await waitForLive(page);
+
+    // Start on the default current_a tab.
+    await expect(page.getByTestId("chart-current_a")).toBeVisible();
+
+    // Ctrl-click chip_temp_c → both channels selected, chart key is joined.
+    await page.getByTestId("tab-chip_temp_c").click({ modifiers: ["ControlOrMeta"] });
+    await expect(page.getByTestId("tab-current_a")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("tab-chip_temp_c")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("chart-current_a+chip_temp_c")).toBeVisible();
+
+    // Both per-series legend rows render with their own stats.
+    await expect(page.getByTestId("chart-stats-current_a")).toBeVisible();
+    await expect(page.getByTestId("chart-stats-chip_temp_c")).toBeVisible();
+
+    // Ctrl-click chip_temp_c again → drops it; current_a stays.
+    await page.getByTestId("tab-chip_temp_c").click({ modifiers: ["ControlOrMeta"] });
+    await expect(page.getByTestId("tab-chip_temp_c")).toHaveAttribute("aria-selected", "false");
+    await expect(page.getByTestId("chart-current_a")).toBeVisible();
+  });
+
   test("sends a command and gets back a cmd id", async ({ page }) => {
     await page.goto("/");
     await waitForLive(page);

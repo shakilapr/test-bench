@@ -34,7 +34,8 @@ export function buildMetadata(deviceId: string) {
   return {
     v: 1,
     device_id: deviceId,
-    metadata_version: 2,
+    metadata_version: 3,
+    simulator: true,
     channels: [
       {
         key: "current_a",
