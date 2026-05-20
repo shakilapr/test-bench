@@ -119,4 +119,23 @@ describe("CommandRepo", () => {
     expect(r?.issued_at).toBe(100);
     expect(r?.updated_at).toBe(200);
   });
+
+  it("recent returns commands for a device ordered by issued_at DESC", () => {
+    cmd.insert("c1", "d1", "a", {}, 100);
+    cmd.insert("c2", "d1", "b", {}, 200);
+    cmd.insert("c3", "d2", "c", {}, 150);
+    const rows = cmd.recent("d1");
+    expect(rows.length).toBe(2);
+    expect(rows[0].cmd_id).toBe("c2");
+    expect(rows[1].cmd_id).toBe("c1");
+  });
+
+  it("recent respects limit", () => {
+    for (let i = 0; i < 10; i++) cmd.insert(`c${i}`, "d1", "x", {}, i);
+    expect(cmd.recent("d1", 3).length).toBe(3);
+  });
+
+  it("get returns undefined for unknown cmd_id", () => {
+    expect(cmd.get("nonexistent")).toBeUndefined();
+  });
 });
