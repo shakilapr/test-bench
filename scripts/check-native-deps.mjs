@@ -9,10 +9,10 @@ const requireFromBackend = createRequire(path.join(root, "backend", "package.jso
 const requireFromUi = createRequire(path.join(root, "ui", "package.json"));
 
 const rollupPackages = {
-  "linux-x64": "@rollup/rollup-linux-x64-gnu",
-  "win32-x64": "@rollup/rollup-win32-x64-msvc",
-  "darwin-x64": "@rollup/rollup-darwin-x64",
-  "darwin-arm64": "@rollup/rollup-darwin-arm64",
+  "linux-x64": ["@rollup/rollup-linux-x64-gnu"],
+  "win32-x64": ["@rollup/rollup-win32-x64-msvc", "@rollup/rollup-win32-x64-gnu"],
+  "darwin-x64": ["@rollup/rollup-darwin-x64"],
+  "darwin-arm64": ["@rollup/rollup-darwin-arm64"],
 };
 
 const esbuildPackages = {
@@ -26,6 +26,14 @@ const platformKey = `${process.platform}-${process.arch}`;
 const expectedRollup = rollupPackages[platformKey];
 const expectedEsbuild = esbuildPackages[platformKey];
 const problems = [];
+
+function canResolveAny(packages, resolver) {
+  if (!packages) return true;
+  for (const pkg of packages) {
+    if (canResolve(pkg, resolver)) return true;
+  }
+  return false;
+}
 
 function canResolve(packageName, resolver = requireFromRoot) {
   if (!packageName) {
@@ -77,8 +85,8 @@ function hasValidSqliteBinary() {
   return true;
 }
 
-if (!canResolve(expectedRollup, requireFromUi)) {
-  problems.push(expectedRollup ?? `Rollup native package for ${platformKey}`);
+if (!canResolveAny(expectedRollup, requireFromUi)) {
+  problems.push((expectedRollup ?? [`Rollup native package for ${platformKey}`]).join(" or "));
 }
 
 if (!canResolve(expectedEsbuild)) {

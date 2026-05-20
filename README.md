@@ -90,34 +90,34 @@ npm run test:firmware   # PlatformIO native unit tests (requires PlatformIO)
    The PlatformIO pre-build hook
    (`firmware/scripts/secrets_to_defines.py`) bakes these values into the
    binary so the board self-provisions NVS on first boot.
-2. Build and upload from Linux:
+2. Build and upload from Windows:
 
-   ```sh
+   ```powershell
    pio run --project-dir firmware -t upload
    ```
 
-   The active PlatformIO serial settings are Linux ports:
+   The active PlatformIO serial settings are Windows ports:
 
    ```ini
-   upload_port = /dev/ttyUSB0
-   monitor_port = /dev/ttyUSB0
+   upload_port = COM5
+   monitor_port = COM5
    ```
 
-   If the board appears as another Linux port, check it with
+   If the board appears as another COM port, check it with
    `pio device list` and update `firmware/platformio.ini`.
 
-   Windows still works. Leave the Linux ports active for this checkout, or
-   temporarily switch the commented Windows settings in
-   `firmware/platformio.ini` when flashing from Windows:
+   Linux still works. Leave the Windows ports active for this checkout, or
+   temporarily switch the commented Linux settings in
+   `firmware/platformio.ini` when flashing from Linux:
 
    ```ini
-   ; upload_port = COM5
-   ; monitor_port = COM5
+   ; upload_port = /dev/ttyUSB0
+   ; monitor_port = /dev/ttyUSB0
    ```
 
-   Windows upload command, from PowerShell, is still the same:
+   Linux upload command is still the same:
 
-   ```powershell
+   ```sh
    # pio run --project-dir firmware -t upload
    ```
 
