@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "predev": "node scripts/check-native-deps.mjs",
-    "dev": "concurrently -n be,sim,ui -c blue,green,magenta \"npm:dev:backend\" \"npm:dev:sim\" \"npm:dev:ui\"",
+    "dev": "concurrently -n be,ui -c blue,magenta \"npm:dev:backend\" \"npm:dev:ui\"",
     "predev:real": "node scripts/check-native-deps.mjs",
     "dev:real": "concurrently -n be,ui -c blue,magenta \"npm:dev:backend\" \"npm:dev:ui\"",
     "dev:backend": "cross-env NODE_ENV=development PORT=3000 npm --workspace backend run dev",
