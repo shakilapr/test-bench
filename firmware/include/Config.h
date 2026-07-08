@@ -4,8 +4,8 @@
 
 namespace Config {
 
-constexpr uint8_t kI2cSdaPin = 12;
-constexpr uint8_t kI2cSclPin = 17;
+constexpr uint8_t kI2cSdaPin = 21;
+constexpr uint8_t kI2cSclPin = 22;
 constexpr uint8_t kAds1115Address = 0x48;
 
 // Motor speed reader (Hall sensor → PCNT). GPIO33 is a safe general-purpose
