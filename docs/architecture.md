@@ -20,9 +20,8 @@ The simplified decision:
 ```text
 ESP32 = device node
 MQTT = device bus
-InfluxDB = time-series store
-Grafana = plotting engine
-Custom app = control, setup, sessions, safety, and workflow
+SQLite = session data store (no live DB writes)
+Custom web UI = telemetry visualization, control, setup, sessions, safety, and workflow
 Backend = only authority allowed to send commands
 ```
 
@@ -30,20 +29,21 @@ Backend = only authority allowed to send commands
 
 ```text
 Telemetry:
-ESP32 -> MQTT -> backend collector -> InfluxDB -> Grafana panels -> custom web UI
+ESP32 -> MQTT -> backend collector -> in-memory buffer -> WebSocket -> custom web UI
+(On session stop) in-memory buffer -> SQLite recording_samples payload
 
 Control:
 custom web UI -> backend API -> MQTT command -> ESP32 -> MQTT ack -> backend -> custom web UI
 ```
 
-Grafana is used for plots only. It is not the command authority.
+The custom web UI is used for plots. It is the sole interface for the user.
 
 The user sees one software interface:
 
 ```text
 Custom web UI
   live cards
-  embedded Grafana plots
+  native SVG plots (Chart.svelte)
   recording controls
   export links
   command forms
@@ -62,9 +62,8 @@ MVP includes:
 - ESP32-S3 chip temperature
 - MQTT telemetry
 - backend collector
-- InfluxDB storage
-- Grafana dashboard/panels
-- custom web UI with embedded Grafana panels
+- SQLite session storage
+- custom web UI with native SVG panels
 - start/stop recording session
 - CSV export path
 - one safe command: `set_sample_interval`
@@ -96,11 +95,8 @@ MVP done means:
 | Device transport | MQTT | Simple, bidirectional, scales to many devices. |
 | Broker | Mosquitto | Lightweight and standard. |
 | Backend | Node.js + TypeScript + Fastify | TypeScript matches the frontend ecosystem; Fastify has built-in schema validation and is fast. |
-| SQLite driver | better-sqlite3 | Synchronous and simple for low-rate control-plane state only; never use it for per-sample telemetry writes. |
+| SQLite driver | better-sqlite3 | Synchronous and simple. Used for low-rate control-plane state and serializing whole telemetry sessions on "stop". |
 | MQTT client | mqtt (npm) | Mature, well-maintained Node.js MQTT client. |
-| InfluxDB client | @influxdata/influxdb-client | Official write client for InfluxDB v2. Keep backend logic on the write path and avoid app-owned Flux queries where possible. |
-| Time-series DB | InfluxDB v2 | Acceptable for MVP because Grafana owns most query UX, but do not couple the app to Flux-heavy query logic. |
-| Plotting | Grafana | Avoid building charting/export/time-range tooling ourselves. |
 | Web UI | Svelte + Vite | Component structure, TypeScript, small output. Backend serves `dist/` as static files. |
 | UI router | svelte-spa-router | Hash-based client-side routing; no SvelteKit needed since backend owns the API. |
 
@@ -123,7 +119,7 @@ bench-telemetry/
   simulator/            hardware-less device simulator
   e2e/                  in-process broker + backend + sim, hits HTTP
   chaos/                resilience checks against a live stack
-  infra/                optional Docker compose (Mosquitto, InfluxDB, Grafana)
+  infra/                optional Docker compose (Mosquitto)
   docs/                 architecture.md, wiring.md, work-plan.md, runbook.md
   package.json          npm workspaces; `npm run dev` boots the no-Docker stack
   README.md
@@ -160,7 +156,7 @@ The ESP32 does not:
 The backend does:
 
 - subscribe to MQTT telemetry/status/metadata/ack
-- write telemetry to InfluxDB
+- buffer live telemetry in-memory
 - manage recording sessions
 - track active recording windows in SQLite
 - expose REST APIs for UI workflows
@@ -170,30 +166,12 @@ The backend does:
 - mark commands as `timed_out` when acknowledgements do not arrive in time
 - validate actuator/CAN commands before publishing
 
-### Grafana
-
-Grafana does:
-
-- time-series charts
-- time range exploration
-- dashboard panels
-- CSV/data export from panels
-- annotations/events if useful
-- alerts later if needed
-
-Grafana does not:
-
-- publish MQTT commands
-- control actuators directly
-- own safety logic
-- replace backend validation
-
 ### Custom Web UI
 
 The custom UI does:
 
 - show live status cards
-- embed Grafana panels for plots
+- render native SVG time-series plots (`Chart.svelte`)
 - start/stop recordings
 - show command forms
 - show command ack/timeout state
@@ -207,12 +185,12 @@ The custom UI does:
 ```text
 ESP32 publishes MQTT telemetry
 backend receives telemetry
-backend writes points to InfluxDB
-Grafana panels query InfluxDB
-custom UI embeds Grafana panels
+backend routes it to in-memory RecordingBuffer
+backend broadcasts via WebSocket to custom UI
+custom UI renders natively using Chart.svelte
 ```
 
-The custom UI may also receive latest values from the backend over WebSocket for fast numeric cards. Grafana should handle the heavy plotting.
+The custom UI handles heavy plotting using its custom SVG component (`Chart.svelte`) and receives the latest values from the backend over WebSocket for fast numeric cards.
 
 ### Recording
 
@@ -222,14 +200,14 @@ Recording is a backend concept.
 UI clicks Start Recording
 backend creates recording_id
 backend marks device recording active
-backend records start/end time in SQLite
-InfluxDB stores telemetry by device and time
+backend appends ongoing telemetry to RecordingBuffer
 UI clicks Stop Recording
 backend closes recording_id
-Grafana/Influx query filters by device_id and recording time range
+backend flushes the entire in-memory buffer as a single JSON row into SQLite `recording_samples`
+UI can download/export data via REST API which pulls from SQLite
 ```
 
-This avoids high-churn `recording_id` tags in InfluxDB and keeps storage simple.
+This avoids any database writes during the high-speed live recording phase, eliminating event loop blocking.
 
 ### Commands
 
@@ -247,7 +225,7 @@ UI shows result
 
 Rules:
 
-- Grafana never publishes commands directly.
+- The UI never publishes commands directly.
 - Backend is the only command authority.
 - ESP32 ignores unknown commands.
 - Commands must be idempotent where possible.
@@ -290,9 +268,8 @@ Credential storage:
 
 - ESP32 stores Wi-Fi and MQTT credentials in NVS after provisioning.
 - `Config.h` must not contain secrets.
-- backend reads MQTT, InfluxDB, and Grafana credentials from environment variables or a local ignored config file.
+- backend reads MQTT credentials from environment variables or a local ignored config file.
 - MVP assumes a trusted local bench network. Backend API auth is intentionally out of scope for MVP.
-- Grafana anonymous access is allowed only on a trusted isolated bench network.
 
 If Mosquitto credentials are enabled, configure them on the broker too:
 
@@ -345,7 +322,7 @@ Rules:
 - A reading is omitted entirely when the sensor is unreadable (e.g. ADS1115 not on the bus). The firmware never emits `NaN` because ArduinoJson serialises `NaN` as JSON `null`, which the backend schema rejects — silently dropping the whole packet. See `firmware/src/bench/Protocol.cpp::buildTelemetryJson`.
 - `quality` is optional per channel and stores an integer code.
 - `0` means OK.
-- nonzero quality codes are defined in metadata (`metadata.quality_codes[channel][code]` → human label) and stored as integers so the backend and Grafana can filter them cheaply. The UI looks up the label and shows it next to the channel.
+- nonzero quality codes are defined in metadata (`metadata.quality_codes[channel][code]` → human label) and stored as integers so the backend and UI can filter them cheaply. The UI looks up the label and shows it next to the channel.
 - `time_unix_ms` is included only after NTP is synced.
 - `time_synced` tells the backend whether ESP UTC time is trustworthy.
 - The backend should still store its receive time; ESP time is useful for alignment and diagnostics, not as the only clock.
@@ -520,77 +497,41 @@ Timeout rules:
 - a background task marks pending commands as `timed_out` after their timeout
 - a late ack may still be stored, but the UI should show that it arrived after timeout
 
-## InfluxDB Model
+## Data Storage Model
 
-Use one wide point per device sample.
+Use one wide JSON blob per device recording session.
 
-Do not store one point per channel. A narrow schema such as `channel=current_a` looks flexible, but it creates more series and makes wide CSV export harder. InfluxDB is a better fit when each device sample writes multiple channel fields at the same timestamp.
+Do not store telemetry row-by-row in SQLite. A per-sample schema creates excessive database churn and blocks the event loop. Instead, the backend aggregates samples in-memory during a recording and flushes them as a single JSON object when the recording stops.
 
-The backend writes telemetry to InfluxDB directly. SQLite is only for low-rate control-plane state such as devices, recordings, commands, and events.
+The backend writes telemetry to SQLite directly.
 
-Measurement:
+Measurement Table:
 
 ```text
-bench_sample
+recording_samples
 ```
-
-Tags:
-
-- `device_id`
-- optional stable hardware group tags later, for example `device_type`
 
 Fields:
+- `recording_id`: foreign key to recordings
+- `sample_count`: number of points in this session
+- `channels_json`: list of channels recorded
+- `payload`: the serialized array of all telemetry samples
 
-- one numeric field per channel, for example `current_a`, `chip_temp_c`
-- `seq`
-- `device_ms`
-- `boot_id`
-- `esp_time_unix_ms` when available
-- optional integer quality fields, for example `current_a_quality`
-
-Example line protocol:
-
-```text
-bench_sample,device_id=bench-01 current_a=12.34,chip_temp_c=41.8,current_a_quality=0i,seq=12345i,device_ms=987654i,boot_id="8d95e447-2a3d-4eb4-a2fa-6ef8f23f51f4"
-```
-
-Session events can be written as annotations/events:
-
-```text
-bench_event,device_id=bench-01,type=recording_start,recording_id=rec-001 value=1i
-```
-
-`recording_id` is acceptable as a tag on `bench_event` because session events are low-volume. It must not be a tag on `bench_sample`.
-
-This is enough for Grafana to plot:
-
-- live current
-- chip temperature
-- selected recording sessions by time range
-- future CAN-decoded channels
-- actuator state channels
-
-Schema rules:
-
-- `device_id` is a tag.
-- channel names are fields.
-- all readings from one telemetry message should be written as one Influx point where possible.
-- field types must stay stable; for example `current_a` is always numeric.
-- units live in metadata, not as high-churn tags.
-- quality is stored as an integer field or as an event, not as a tag.
-- `boot_id` is a field, not a tag, because it changes every boot.
-- `recording_id` is not a tag on `bench_sample`. It is acceptable as a tag on `bench_event` because session events are low-volume.
-- Recordings are still queried by `device_id` and start/stop time from SQLite, not by joining on `recording_id`.
+This is enough for the UI to plot:
+- live current and chip temperature (via WebSocket)
+- selected recording sessions by time range (via REST pulling the payload)
+- future CAN-decoded channels and actuator state channels
 
 ## Backend App State
 
-Use a small SQLite database only for workflow/state, not raw telemetry samples.
+Use a local SQLite database for workflow/state and historical recording payloads.
 
 Tables needed:
 
 - `devices`
 - `device_metadata`
 - `recordings`
+- `recording_samples`
 - `commands`
 - `device_events`
 
@@ -602,7 +543,7 @@ PRAGMA synchronous=NORMAL;
 PRAGMA foreign_keys=ON;
 ```
 
-This keeps SQLite small and avoids building a custom time-series store.
+This keeps SQLite extremely fast and avoids the overhead of a dedicated time-series store.
 
 ## Backend API
 
@@ -618,11 +559,8 @@ GET  /api/commands/{cmd_id}
 GET  /api/recordings?device_id=...
 POST /api/recordings/start
 POST /api/recordings/{id}/stop
-GET  /api/grafana/panels/{panel_key}?device_id=...&recording_id=...
+GET  /api/recordings/{id}/export
 WS   /ws/live
-```
-
-For Grafana panel URLs, `recording_id` is resolved by the backend to the recording start/stop time range. It is not assumed to be an InfluxDB tag.
 
 Backend command response:
 
@@ -657,11 +595,11 @@ WebSocket reconnect:
 - cap reconnect delay at 10 seconds before jitter.
 - add up to 1 second of random jitter to avoid reconnect bursts after backend restarts.
 - after reconnect, UI refetches latest device state and active recording state from REST.
-- Grafana panels remain the plotting source; the WebSocket is for cards, status, and workflow state.
+- The UI renders charts natively; the WebSocket is for live telemetry, status, and workflow state.
 
-## Grafana Embedding
+## Data Visualization
 
-The custom UI embeds Grafana panels for plotting.
+The custom UI renders plots natively using `Chart.svelte`.
 
 Panel examples:
 
@@ -669,39 +607,26 @@ Panel examples:
 - live chip temperature
 - selected channels over time
 - recording session view
-- CAN decoded signal view later
-- actuator state history later
-
-Embedding rules:
-
-- custom UI owns navigation and workflow
-- Grafana owns chart panels only
-- backend generates panel URLs or iframe config
-- panel URLs include device/session variables
-- Grafana anonymous access is acceptable only on a trusted local bench network
-- otherwise users must authenticate to Grafana
 
 Example custom UI layout:
 
 ```text
 Device header: bench-01 | online | recording off
 Cards: Current | Chip Temp | Wi-Fi RSSI | Last Ack
-Plot area: embedded Grafana panel
+Plot area: native Chart.svelte SVG plot
 Controls: Start Recording | Stop | Export | Set Sample Interval
 Diagnostics: events, metadata, command history
 ```
 
 ## Export
 
-Use Grafana/InfluxDB export for plotted data when possible.
+The custom UI supports direct CSV export.
 
 For recording exports:
 
-- backend stores recording start/stop times and `recording_id`
-- export queries InfluxDB by `device_id` and the recording start/stop time range
-- default export should be CSV
-- wide CSV is preferred for users
-- wide InfluxDB fields map directly to wide CSV columns
+- backend reads the `recording_samples.payload` JSON blob from SQLite
+- backend parses the JSON back into memory
+- backend formats it on-the-fly into a CSV string and streams it to the UI
 
 CSV columns:
 
@@ -716,8 +641,8 @@ To add a sensor:
 1. Add firmware driver.
 2. Add channel to metadata.
 3. Publish value under `readings`.
-4. Backend writes it to InfluxDB as `bench_sample`.
-5. Grafana can plot it by `channel`.
+4. Backend writes it to the in-memory buffer, and eventually to SQLite.
+5. UI native charts can plot it by `channel`.
 6. UI can show it from metadata.
 
 No new database table is needed.
@@ -859,15 +784,7 @@ backend/
         metadata.ts      parse, validate, and store device metadata
         ack.ts           resolve pending commands from ack messages
       publisher.ts       build and publish command payloads
-    influx/
-      client.ts          InfluxDB connection
-      writer.ts          format and write bench_sample points
-    api/
-      router.ts          mount all route groups on Fastify
-      devices.ts         GET /api/devices, GET /api/devices/:id/latest, /meta, /events
-      commands.ts        POST /api/devices/:id/commands, GET /api/commands/:cmd_id
-      recordings.ts      GET /api/recordings, POST /api/recordings/start, /stop
-      grafana.ts         GET /api/grafana/panels/:key
+      recordings.ts      GET /api/recordings, POST /api/recordings/start, /stop, /export
     ws/
       hub.ts             WebSocket broadcast hub, tracks connected clients
       events.ts          typed event envelope definitions
@@ -889,7 +806,7 @@ Module rules:
 - `index.ts` only wires modules. No business logic.
 - `config.ts` validates all env vars at startup and fails fast on missing values.
 - `db/` modules export pure query functions. No business logic.
-- `mqtt/handlers/` modules are thin: parse, validate, call into `db/` or `influx/`, emit to `ws/hub`.
+- `mqtt/handlers/` modules are thin: parse, validate, call into `db/`, emit to `ws/hub`.
 - `commands/dispatcher.ts` is the only place that generates `cmd_id` and publishes to MQTT.
 - `commands/registry.ts` is the single source of truth for which commands exist and what their timeouts are.
 ## UI Layout
@@ -902,7 +819,6 @@ ui/
     lib/
       components/
         Card.svelte          numeric reading card (label, value, unit, quality)
-        GrafanaPanel.svelte  iframe wrapper with URL and time-range props
         CommandForm.svelte   validates and submits a command, shows ack/timeout
         StatusPill.svelte    online/offline/fault indicator
         RecordingBar.svelte  start/stop recording, shows active session name
@@ -916,10 +832,10 @@ ui/
         client.ts            typed fetch wrappers for all REST endpoints
       types.ts               shared TypeScript types (mirrors backend API types)
     routes/
-      Live.svelte            cards + Grafana panel + RecordingBar + CommandForm
+      Live.svelte            cards + native plot + RecordingBar + CommandForm
       Recordings.svelte      session list, export links, notes
       Device.svelte          metadata, status history, command history
-      Setup.svelte           backend URL and Grafana URL (stored in localStorage)
+      Setup.svelte           backend URL configuration
       Advanced.svelte        CAN tools and actuator controls (later)
     App.svelte               router mount, nav bar, WebSocket init
     main.ts                  entry point
@@ -937,7 +853,7 @@ Design rules:
 - High contrast. Works under bench lighting.
 - Every status has a clear visual state: online, offline, sensor fault, recording, command pending, ack, timeout.
 - Dangerous actions (actuators, raw CAN) are visually separated and require confirmation.
-- Plots come from Grafana panels, not custom chart code.
+- Plots come from native `Chart.svelte` components, not external iframes.
 - The `dist/` directory is generated, not committed.
 - Production startup should fail fast if `ui/dist/` is missing, or build it before starting.
 
@@ -951,7 +867,6 @@ Each part runs independently.
 ```powershell
 # 1. Start infrastructure
 mosquitto                        # or use the system service
-# InfluxDB and Grafana started separately (see their docs)
 
 # 2. Start backend in dev mode (watches src/, restarts on change)
 cd backend
@@ -1069,8 +984,8 @@ MVP failure points:
 4. Wi-Fi failure
 5. MQTT broker down
 6. backend collector down
-7. InfluxDB down or disk full
-8. Grafana down or bad panel URL
+7. Backend out of memory (OOM)
+8. SQLite write failure
 9. custom UI/backend API bug
 10. command ack timeout or duplicate command delivery
 
@@ -1103,23 +1018,23 @@ Recommended first command:
 mosquitto_sub -t "bench/#" -v
 ```
 
-Do not start the backend, InfluxDB, or UI until valid telemetry/status/meta JSON is visible here.
+Do not start the backend or UI until valid telemetry/status/meta JSON is visible here.
 
-### Phase 2: InfluxDB And Grafana
+### Phase 2: Data Storage & Visualization
 
 - Backend subscribes to telemetry.
-- Backend writes wide `bench_sample` points to InfluxDB.
-- Grafana shows current and chip temperature plots.
+- Backend writes wide `recording_samples` rows to SQLite on recording stop.
+- UI shows current and chip temperature plots via SVG.
 
 Done when:
 
-- Grafana plots update live.
-- Backend reconnects to MQTT and InfluxDB after either restarts, with no manual intervention.
+- Native UI plots update live.
+- Backend reconnects to MQTT after restarts, with no manual intervention.
 - A backend restart does not lose retained metadata; cached metadata refills from broker.
 
 ### Phase 3: Custom UI Shell
 
-- Custom UI embeds Grafana panels.
+- Custom UI renders native charts.
 - UI shows latest cards from backend WebSocket/API.
 - UI starts/stops recording sessions.
 - UI exposes CSV export path.
@@ -1152,25 +1067,25 @@ Done when:
 - Add CAN transmit only through validated commands.
 - Add actuators only with safe-state hardware and firmware rules.
 
-Done when new channels appear in Grafana/UI without changing storage design.
+Done when new channels appear in the UI without changing storage design.
 
 ## Definition Of Done
 
 MVP is done when:
 
 - ESP telemetry reaches MQTT.
-- Backend writes telemetry to InfluxDB.
-- InfluxDB uses wide `bench_sample` points, not one point per channel.
-- `boot_id` is stored with samples as a field.
-- Grafana plots readings.
-- Custom UI embeds Grafana panels.
+- Backend buffers telemetry in-memory.
+- SQLite uses a JSON payload blob for recordings.
+- `boot_id` is included with telemetry.
+- UI plots readings natively.
+- Custom UI renders `Chart.svelte` without Grafana.
 - User can start/stop a recording.
 - User can export recorded data.
 - User can send `set_sample_interval`.
 - ESP sends command ack.
 - Backend marks command timeout after the configured timeout.
 - Duplicate command delivery is safe.
-- Adding a new sensor only needs firmware metadata and a Grafana/UI config update.
+- Adding a new sensor only needs firmware metadata to update the UI automatically.
 
 Target architecture is done when:
 

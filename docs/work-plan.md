@@ -8,7 +8,7 @@ Conventions:
 
 - Firmware tests use PlatformIO's Unity (`pio test -e native`).
 - Backend tests use **Vitest** (unit + integration) and **Testcontainers** for
-  Mosquitto/InfluxDB integration.
+  Mosquitto integration.
 - UI tests use **Vitest + @testing-library/svelte** for components/stores and
   **Playwright** for one happy-path end-to-end.
 - Pipeline runs in GitHub Actions: firmware build, backend unit + integration,
@@ -26,14 +26,11 @@ Goal: get the repo shape right before any product code lands.
    `coverage/`, `playwright-report/`, `test-results/`, `*.heapsnapshot`,
    `.testcontainers/`.
 2. **Create top-level layout**: `backend/`, `ui/`, `infra/` (compose files,
-   mosquitto config, grafana provisioning), `docs/`.
-3. **Add `infra/docker-compose.dev.yml`** with services: `mosquitto`,
-   `influxdb` (v2), `grafana`. Bind volumes for persistence.
+   mosquitto config), `docs/`.
+3. **Add `infra/docker-compose.dev.yml`** with services: `mosquitto`. Bind volumes for persistence.
 4. **Add `infra/mosquitto/mosquitto.conf`**: persistence on, listener 1883,
    `password_file` and `acl_file` referenced (commented out for MVP),
    `allow_anonymous true` for MVP with explicit warning comment.
-5. **Add `infra/grafana/provisioning/`**: datasource pointing at InfluxDB,
-   placeholder dashboard JSON.
 6. **Add `.env.example`** at repo root and copies in `backend/`.
 7. **GitHub Actions workflow** `.github/workflows/ci.yml`:
    - `firmware`: PlatformIO build + `pio test -e native`.
@@ -50,13 +47,12 @@ Goal: get the repo shape right before any product code lands.
 | 2 | n/a |
 | 3 | `docker compose -f infra/docker-compose.dev.yml config` parses; `up -d` then `mosquitto_pub -t test -m hi && mosquitto_sub -t test -C 1` round-trip works |
 | 4 | broker accepts a publish; LWT test: kill a connected client, retained `offline` arrives |
-| 5 | Grafana boots and shows the provisioned datasource as healthy |
 | 6 | Backend startup test fails fast when required env vars are missing |
 | 7 | Each CI job green on a no-op commit |
 
 ### Done when
 
-- `docker compose up` brings broker + db + grafana healthy.
+- `docker compose up` brings broker healthy.
 - CI is green on an empty PR.
 
 ---
@@ -137,44 +133,42 @@ env `[env:native]` with `platform = native` for host-side runs.
 
 ---
 
-## Phase 2 — Backend collector + InfluxDB + Grafana
+## Phase 2 — Backend collector + SQLite storage
 
-Goal: backend ingests MQTT, writes wide `bench_sample` points to InfluxDB,
-Grafana plots them.
+Goal: backend ingests MQTT, routes live telemetry to buffer, and flushes to SQLite on stop.
 
 ### Steps
 
 1. **`backend/` scaffold**: `package.json`, `tsconfig.json`, ESLint + Prettier,
    Vitest, `tsx` for dev.
-2. **`config.ts`** validates env (`MQTT_URL`, `INFLUX_URL`, `INFLUX_TOKEN`,
-   `INFLUX_ORG`, `INFLUX_BUCKET`, `SQLITE_PATH`, `PORT`, `NODE_ENV`).
+2. **`config.ts`** validates env (`MQTT_URL`,
+   `SQLITE_PATH`, `PORT`, `NODE_ENV`).
 3. **`db/` modules** (`better-sqlite3`): create schema on startup, expose pure
    query functions for `devices`, `device_metadata`, `recordings`, `commands`,
    `device_events`. SQLite is **only** used here, never on the telemetry path.
 4. **`mqtt/client.ts`**: connect with reconnect; subscribe `bench/+/telemetry`,
    `bench/+/status`, `bench/+/meta`, `bench/+/ack`.
-5. **`mqtt/handlers/telemetry.ts`**: parse, validate (Zod), call
-   `influx/writer.ts`, broadcast on `ws/hub`.
+5. **`mqtt/handlers/telemetry.ts`**: parse, validate (Zod), buffer in
+   `RecordingBuffer`, broadcast on `ws/hub`.
 6. **`mqtt/handlers/status.ts`**, **`metadata.ts`**, **`ack.ts`** per spec,
    including metadata-version-regression warning.
-7. **`influx/writer.ts`**: build line protocol with the rules from
-   `architecture.md` §InfluxDB Model (wide point, `boot_id` as field, integer
-   quality fields). Use a small batch + flush interval.
+7. **`recordings.ts`**: flush `RecordingBuffer` to `recording_samples` SQLite
+   table as a single JSON blob when recording stops.
 8. **`api/` (Fastify routes)**: implement the endpoints listed in
    `architecture.md` §Backend API.
 9. **`ws/hub.ts`**: broadcast typed envelopes; track clients; clean up on
    disconnect.
-10. **Grafana provisioning**: datasource + "Bench Live" dashboard with `current_a`
+10. **UI native plotting**: `Chart.svelte` with `current_a`
     and `chip_temp_c` panels filtered by `device_id`.
 
 ### Unit tests
 
 | File | Test |
 | --- | --- |
-| `mqtt/handlers/telemetry.test.ts` | rejects payload missing `device_id`/`boot_id`; accepts valid; calls `influx.write` with correct fields |
+| `mqtt/handlers/telemetry.test.ts` | rejects payload missing `device_id`/`boot_id`; accepts valid; pushes to `RecordingBuffer` with correct fields |
 | `mqtt/handlers/metadata.test.ts` | stores higher version; logs warning + still updates cache when lower version arrives |
 | `mqtt/handlers/ack.test.ts` | resolves pending command; ignores unknown `cmd_id`; correctly maps `sent` vs `completed` |
-| `influx/writer.test.ts` | line protocol matches golden fixtures, including integer quality fields and stable field types |
+| `buffer.test.ts` | flushes payload as a JSON blob array, including integer quality fields and stable field types |
 | `commands/dispatcher.test.ts` | generates UUID `cmd_id`; persists pending; publishes correct payload |
 | `commands/timeout.test.ts` | marks pending older than timeout as `timed_out`; late ack flagged "after timeout" |
 | `db/recordings.test.ts` | start/stop, can't start two on the same device, list filters by device |
@@ -183,9 +177,9 @@ Grafana plots them.
 
 ### Integration tests (`backend/test/integration/`)
 
-- **MQTT → Influx**: spin up Mosquitto + InfluxDB via Testcontainers, publish
-  one telemetry message, query Influx, assert one wide point exists with the
-  expected fields.
+- **MQTT → SQLite flush**: spin up Mosquitto via Testcontainers, publish
+  a burst of telemetry messages, start and stop recording, query SQLite, assert
+  one JSON blob exists with the expected array of points.
 - **Backend restart**: kill the backend mid-stream, restart, assert
   - retained meta is reapplied,
   - WS clients can reconnect and refetch state via REST,
@@ -201,15 +195,15 @@ Grafana plots them.
 ### Done when
 
 - Architecture Phase 2 DoD passes:
-  - Grafana plots update live.
-  - Backend reconnects to MQTT and InfluxDB after either restarts.
+  - Native UI SVG plots update live.
+  - Backend reconnects to MQTT after broker restarts.
   - Cached metadata refills from broker after backend restart.
 
 ---
 
 ## Phase 3 — Custom UI shell
 
-Goal: one screen for live cards + Grafana panel + recording controls.
+Goal: one screen for live cards + native SVG plot + recording controls.
 
 ### Steps
 
@@ -221,7 +215,7 @@ Goal: one screen for live cards + Grafana panel + recording controls.
    jitter**, capped at 10 s before jitter, ≤ 1 s random jitter. After reconnect,
    refetch device + recording state via REST.
 4. **`lib/stores/device.ts`**, **`recording.ts`**, **`commands.ts`**.
-5. **Components**: `Card`, `GrafanaPanel`, `CommandForm`, `StatusPill`,
+5. **Components**: `Card`, `Chart`, `CommandForm`, `StatusPill`,
    `RecordingBar`, `DeviceHeader`.
 6. **Routes**: `Live`, `Recordings`, `Device`, `Setup`, `Advanced` (feature-
    flagged off until Phase 5).
@@ -244,7 +238,7 @@ Goal: one screen for live cards + Grafana panel + recording controls.
 - **Playwright smoke** (`e2e/live.spec.ts`):
   1. `docker compose up` + start backend + serve UI build.
   2. A test MQTT publisher emits telemetry as the ESP would.
-  3. UI shows the value in the card within 2 s.
+  3. UI shows the value in the card and plot within 2 s.
   4. Start + stop recording; CSV export endpoint returns expected columns.
   5. Backend is restarted mid-test; UI reconnects, cards resume updating.
 
@@ -302,9 +296,9 @@ Steps and tests are smaller and additive:
 1. **Reconnect jitter** verified by deterministic time mocking in `ws.test.ts`.
 2. **Metadata regression** test confirmed in `metadata.test.ts` and adds a UI
    banner via `device.ts` store.
-3. **Disk-full / Influx-down** chaos test: stop InfluxDB while backend is
+3. **Disk-full / OOM** chaos test: simulate out of memory or disk full while backend is
    running; assert backend buffers a small bounded queue, drops oldest with a
-   warning event, recovers when Influx returns.
+   warning event, recovers.
 4. **CAN ack semantics**: `sent` ack mapped in dispatcher + UI.
 5. **Documentation**: `docs/firmware-release.md`, `docs/runbook.md`,
    `docs/mosquitto-setup.md`.
@@ -322,8 +316,8 @@ Steps and tests are smaller and additive:
 
 - `types/api.ts` is shared (or mirrored) between backend and UI; a CI step diffs
   the two and fails on drift.
-- A **golden line-protocol** fixture file makes it impossible to silently change
-  Influx schema.
+- A **JSON schema** fixture file makes it impossible to silently change
+  SQLite JSON payload structures.
 
 ### Chaos / resilience matrix
 
@@ -331,7 +325,7 @@ Steps and tests are smaller and additive:
 | --- | --- |
 | Broker restart | ESP + backend reconnect; retained meta replays |
 | Backend restart | UI WS reconnects with jitter; pending commands still reaped |
-| Influx down 30 s | backend buffers, then flushes; warning event recorded |
+| High memory usage buffer cap | backend buffers, then flushes; warning event recorded |
 | Wi-Fi drop on ESP | resumes within 30 s, no manual reset |
 | Lower `metadata_version` | warning event, cache replaced |
 | Duplicate `cmd_id` | applied once, second ack `duplicate` |
@@ -357,7 +351,7 @@ its test matrix are green.
 
 ## Phase 6 — End-to-end dummy run (ESP32 simulator)
 
-Goal: prove the full pipeline (MQTT → backend → InfluxDB → Grafana → UI) works
+Goal: prove the full pipeline (MQTT → backend → SQLite (on stop) → UI) works
 without hardware, using a simulator that speaks the **exact same protocol** as
 the firmware.
 
@@ -380,7 +374,7 @@ the firmware.
    - `npm --workspace backend run dev`
    - `npm --workspace ui run dev`
    - `npm run sim`
-   - Open <http://localhost:5173>: live cards update, Grafana panel plots.
+   - Open <http://localhost:5173>: live cards update, native SVG panel plots.
    - `--drop 20`: simulator goes offline, status flips, recovers and replays
      retained meta.
    - From the UI, send `set_sample_interval=200`: simulator acks, telemetry
@@ -388,8 +382,7 @@ the firmware.
    - Start a recording, wait 10 s, stop, hit CSV export, confirm rows.
 4. **Automated smoke** (`simulator/test/e2e.test.ts`): boots compose +
    backend + sim in CI for 60 s, then asserts:
-   - InfluxDB has > 60 `bench_sample` points for `bench-sim-01`.
-   - SQLite recording row exists for the started/stopped session.
+   - SQLite recording row exists with a JSON payload of > 60 points for `bench-sim-01`.
    - One `cmd_id` round-trip resolves to `completed`.
    - Duplicate `cmd_id` resolves to `duplicate`.
 
