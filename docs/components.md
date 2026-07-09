@@ -1,23 +1,23 @@
 # Test Bench Hardware Components
 
-This document lists the hardware components required to build and deploy the ESP32-S3 Test Bench telemetry system, defined from the perspective of the ESP controller. 
+This document lists the hardware components required to build and deploy the ESP32 Test Bench telemetry system, defined from the perspective of the ESP controller. 
 
 For the complete pin mapping, see [Config.h](file:///c:/projects/test-bench/firmware/include/Config.h) and [wiring.md](file:///c:/projects/test-bench/docs/wiring.md).
 
 ---
 
 ## 1. Core Controller & Processor
-* **ESP32-S3 Development Board** (e.g., `ESP32-S3-DevKitC-1`)
+* **ESP32 Development Board** (e.g., `ESP32 DevKit V1`)
   * **Role:** The main edge processor. Collects readings from sensors, calculates motor RPM via hardware pulse counting, and publishes telemetry over Wi-Fi via MQTT.
   * **Power:** 3.3V/5V DC input.
   * **Pin Reference:**
-    * `GPIO12` (SDA) & `GPIO17` (SCL) for I2C bus communications.
+    * `GPIO21` (SDA) & `GPIO22` (SCL) for I2C bus communications.
     * `GPIO33` for motor speed pulse input (PCNT peripheral).
 
 ## 2. Analog-to-Digital Conversion (ADC)
 * **ADS1115 ADC Module** (16-bit resolution)
   * **Role:** Measures the microvolt/millivolt differential voltage across the shunt current sensor. Standard ADCs on the ESP32 lack the precision and low noise required for shunt measurements.
-  * **Communication:** Connected to the I2C bus (`GPIO12`/`GPIO17`). Default address: `0x48`.
+  * **Communication:** Connected to the I2C bus (`GPIO21`/`GPIO22`). Default address: `0x48`.
   * **Hardware Tweak:** Configure PGA gain to `GAIN_SIXTEEN` ($\pm 0.256\text{ V}$) to match the $\pm 75\text{ mV}$ full-scale range of the shunt.
 
 ## 3. High-Current Shunt Sensor
@@ -40,23 +40,23 @@ For the complete pin mapping, see [Config.h](file:///c:/projects/test-bench/firm
        * **ESP32 Handling:** Typically processed using the **MCPWM (Motor Control PWM)** Capture peripheral, the **RMT (Remote Control)** hardware receiver, or pin interrupts to measure exact high/low pulse widths.
   * **Connection & Safety:** 
     > [!WARNING]
-    > **Do not connect the 5V encoder signal wire directly to any ESP32-S3 GPIO pin.** The ESP32-S3 operates on 3.3V logic and is **not 5V tolerant**; direct exposure to 5V will permanently destroy the GPIO pin or the entire microcontroller.
+    > **Do not connect the 5V encoder signal wire directly to any ESP32 GPIO pin.** The ESP32 operates on 3.3V logic and is **not 5V tolerant**; direct exposure to 5V will permanently destroy the GPIO pin or the entire microcontroller.
     > 
     > The 5V signal **must** be scaled down to 3.3V using a logic level shifter or a resistive voltage divider before it reaches the input pin (e.g., `GPIO33`).
 
 ## 5. Throttle Control & Interface (0 to 5V Analog)
 * **Throttle Input (Reading Demand):**
   * **Role:** Reads the user's manual throttle input (an analog voltage changing from 0 to 5V).
-  * **ESP32 Handling:** Because the ESP32-S3 internal ADC is limited to 3.3V, a **resistive voltage divider** (e.g., 10kΩ / 20kΩ) must scale the 0-5V signal down to 0-3.3V before reading it. Alternatively, a spare channel on the **ADS1115** can measure the voltage with proper attenuation.
+  * **ESP32 Handling:** Because the ESP32 internal ADC is limited to 3.3V, a **resistive voltage divider** (e.g., 10kΩ / 20kΩ) must scale the 0-5V signal down to 0-3.3V before reading it. Alternatively, a spare channel on the **ADS1115** can measure the voltage with proper attenuation.
 * **Throttle Output (Controlling / Actuation):**
   * **Role:** Generates a 0 to 5V analog signal to command the motor controller's speed.
-  * **ESP32 Handling:** The ESP32-S3 does not have a built-in DAC. To output a true 0 to 5V analog voltage:
+  * **ESP32 Handling:** The ESP32 does not have a built-in DAC. To output a true 0 to 5V analog voltage:
     * Use an **external I2C DAC** (such as the `MCP4725`) powered at 5V, or
     * Generate a **3.3V PWM output** from the ESP32, feed it through a low-pass RC filter, and amplify the result using an **Operational Amplifier (Op-Amp)** with a gain of ~1.5x.
 
 ## 6. Auxiliary & Power Isolation Hardware
 * **Logic Level Shifter / Voltage Divider (5V to 3.3V)**
-  * **Role:** Safely interfaces the 5V encoder/Hall-effect sensor signals to the 3.3V-compliant ESP32-S3 pins.
+  * **Role:** Safely interfaces the 5V encoder/Hall-effect sensor signals to the 3.3V-compliant ESP32 pins.
   * **Implementation Options:**
     * **Resistive Voltage Divider (Sufficient for most encoder applications):** Yes, a simple two-resistor divider is completely sufficient, provided the resistor values are low enough to keep signal rise/fall times fast (minimizing the RC delay caused by parasitic capacitance on the ESP32 input pin).
       * **Recommended for High Bandwidth/High RPM ($1.8\text{ k}\Omega$ and $3.3\text{ k}\Omega$):**

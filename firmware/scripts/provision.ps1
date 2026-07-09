@@ -14,7 +14,7 @@ $sp.NewLine = "`n"
 $sp.WriteTimeout = 2000
 $sp.ReadTimeout  = 200
 $sp.Open()
-# ESP32-S3 native USB-Serial-JTAG needs both DTR and RTS asserted high so
+# Many ESP32 USB-to-Serial bridges need both DTR and RTS asserted high so
 # data is considered "live" on the CDC endpoint. Asserting only one of them
 # pulses the reset/boot pin; asserting both holds the chip in normal run.
 $sp.DtrEnable = $true

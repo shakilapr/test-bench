@@ -59,7 +59,7 @@ Goal: get the repo shape right before any product code lands.
 
 ## Phase 1 — Firmware: replace AP + web UI with MQTT publisher
 
-Goal: ESP32-S3 acts as a "dumb node" per the architecture. Remove the on-device
+Goal: ESP32 acts as a "dumb node" per the architecture. Remove the on-device
 web UI and SoftAP, switch to STA + provisioning + MQTT.
 
 ### Steps

@@ -40,7 +40,7 @@ not responding on the I2C bus.
 1. Watch the boot log for `[i2c] device at 0x48` and `[sensors] begin: ads_ok=1`.
    If `ads_ok=0`, the firmware never found the chip.
 2. Check wiring against `docs/wiring.md` — `Config::kI2cSdaPin`/`kI2cSclPin` are
-   the source of truth. Do not assume the ESP32-S3 default I2C pins.
+   the source of truth. Do not assume the ESP32 default I2C pins.
 3. The ADS1115 `ADDR` pin has an internal pull-down, so it can float (= `0x48`).
    Tying it to `GND` also yields `0x48`. To `VDD` = `0x49`, etc.
 4. UI shows the human label from `metadata.quality_codes` (e.g. `"sensor fault"`)

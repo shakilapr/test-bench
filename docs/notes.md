@@ -5,7 +5,7 @@ Read this once, then keep
 
 ## What this project is
 
-A bench instrument: an **ESP32-S3** measures DC current via an **ADS1115 ADC
+A bench instrument: an **ESP32** measures DC current via an **ADS1115 ADC
 on a 75 mV / 200 A shunt** and reports it (plus the chip's internal
 temperature) over MQTT. A small **Node + Svelte** stack on a laptop
 visualises the live readings and lets the operator record sessions to CSV.
@@ -27,7 +27,7 @@ laptop next to the bench.
 
 | Folder       | What it is                                     | Run with                |
 | ------------ | ---------------------------------------------- | ----------------------- |
-| `firmware/`  | PlatformIO/Arduino code for the ESP32-S3       | `pio run -t upload`     |
+| `firmware/`  | PlatformIO/Arduino code for the ESP32       | `pio run -t upload`     |
 | `backend/`   | Node + Fastify + SQLite + Aedes MQTT broker    | `npm run dev` (root)    |
 | `ui/`        | Svelte + Vite (live charts, CSV export)        | `npm run dev` (root)    |
 | `simulator/` | Fake device for hardware-less development      | started by `npm run dev`|
@@ -112,10 +112,10 @@ and the attack surface tiny.
 
 ## I2C wiring (the gotcha that ate a session)
 
-| ESP32-S3 | ADS1115 |
+| ESP32 | ADS1115 |
 | -------- | ------- |
-| `GPIO12` | `SDA`   |
-| `GPIO17` | `SCL`   |
+| `GPIO21` | `SDA`   |
+| `GPIO22` | `SCL`   |
 | `3V3`    | `VDD`   |
 | `GND`    | `GND`   |
 | —        | `ADDR` (floating ⇒ `0x48`) |

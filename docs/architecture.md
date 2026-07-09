@@ -57,9 +57,9 @@ The MVP should prove the full loop without CAN, actuators, or multi-device compl
 
 MVP includes:
 
-- one ESP32-S3
+- one ESP32
 - ADS1115 current reading
-- ESP32-S3 chip temperature
+- ESP32 chip temperature
 - MQTT telemetry
 - backend collector
 - SQLite session storage
@@ -91,7 +91,7 @@ MVP done means:
 
 | Layer | Choice | Why |
 | --- | --- | --- |
-| ESP firmware | Arduino on ESP32-S3 | Current project already uses this. |
+| ESP firmware | Arduino on ESP32 | Current project already uses this. |
 | Device transport | MQTT | Simple, bidirectional, scales to many devices. |
 | Broker | Mosquitto | Lightweight and standard. |
 | Backend | Node.js + TypeScript + Fastify | TypeScript matches the frontend ecosystem; Fastify has built-in schema validation and is fast. |
