@@ -15,7 +15,7 @@ void CommandRouter::begin() {
 void CommandRouter::sendAck(const char* cmd_id, const char* status, const char* error) {
   JsonDocument doc;
   doc["v"] = 1;
-  doc["device_id"] = net_.deviceId();
+  doc["device_id"] = net_.deviceId(); 
   doc["cmd_id"] = cmd_id;
   doc["status"] = status;
   if (error) doc["error"] = error;

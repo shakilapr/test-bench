@@ -26,7 +26,10 @@ class PulseCounter {
   // call after begin() returns rpm=0 (no time delta yet).
   // Returns true if a value was produced.
   bool sampleRpm(uint32_t now_ms, float pulses_per_rev, float* out_rpm);
-
+ // Raw pulse count from the most recent sampleRpm() call, before any
+  // RPM math is applied. Use this to calibrate kHallPulsesPerRev by
+  // hand-spinning the shaft one turn and reading this value directly.
+  int32_t lastRawCount() const { return last_raw_count_; }  
   bool ok() const { return ok_; }
 
  private:
@@ -34,4 +37,5 @@ class PulseCounter {
   void* channel_;  // pcnt_channel_handle_t
   bool ok_;
   uint32_t last_sample_ms_;
+   int32_t last_raw_count_ = 0;
 };

@@ -12,7 +12,7 @@ constexpr const char* kNs = "bench_state";
 void DeviceState::initialize() {
   boot_id_ = generateBootId();
   Preferences prefs;
-  prefs.begin(kNs, /*readOnly=*/true);
+  prefs.begin(kNs, /*readOnly=*/false);
   sample_interval_ms_ = prefs.getUInt("sample_ms", Config::kDefaultSampleIntervalMs);
   prefs.end();
   if (sample_interval_ms_ < Config::kMinSampleIntervalMs ||

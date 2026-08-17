@@ -2,7 +2,6 @@
 #include <Wire.h>
 
 #include "Config.h"
-#include "CommandRouter.h"
 #include "DeviceState.h"
 #include "NetworkManager.h"
 #include "Provision.h"
@@ -11,22 +10,24 @@
 
 namespace {
 
-Provision provision;
-DeviceState device_state;
 SensorManager sensor_manager;
-NetworkManager network_manager;
-TelemetryPublisher* publisher = nullptr;
-CommandRouter* router = nullptr;
-unsigned long last_publish_ms = 0;
-bool meta_published = false;
+NetworkManager net_manager;
+DeviceState device_state;
+Provision provision;  // moved out of setup() so it stays alive for loop()
+
+// Constructor signature matching (net, state, sensors)
+TelemetryPublisher telemetry_publisher(net_manager, device_state, sensor_manager);
+
+unsigned long last_print_ms = 0;
 
 }  // namespace
 
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("\nESP32 telemetry boot");
+  Serial.println("\nESP32 current-only test with MQTT Telemetry");
 
+  // 1. Initialize I2C Bus & Scan
   Wire.begin(Config::kI2cSdaPin, Config::kI2cSclPin);
   Serial.printf("[i2c] SDA=GPIO%d SCL=GPIO%d — scanning...\n",
                 Config::kI2cSdaPin, Config::kI2cSclPin);
@@ -41,71 +42,65 @@ void setup() {
     }
     if (found == 0) Serial.println("[i2c] no devices found");
   }
+
+  // 2. Initialize Sensors
   bool ok = sensor_manager.begin(Wire);
   Serial.printf("[sensors] begin: ads_ok=%d temp_ok=%d rpm_ok=%d\n",
                 sensor_manager.adsOk(), sensor_manager.tempOk(),
                 sensor_manager.rpmOk());
   if (!ok) Serial.println("sensors: degraded");
 
-  if (!provision.load()) {
-    bool seeded = false;
-#if defined(BUILD_DEVICE_ID) && defined(BUILD_MQTT_URL)
-    Serial.println("NVS empty, seeding from build-time defaults (secrets.json)");
-    String wifi_ssid;
-    String wifi_pass;
-    String mqtt_user;
-    String mqtt_pass;
-#ifdef BUILD_WIFI_SSID
-    wifi_ssid = BUILD_WIFI_SSID;
-#endif
-#ifdef BUILD_WIFI_PASS
-    wifi_pass = BUILD_WIFI_PASS;
-#endif
-#ifdef BUILD_MQTT_USER
-    mqtt_user = BUILD_MQTT_USER;
-#endif
-#ifdef BUILD_MQTT_PASS
-    mqtt_pass = BUILD_MQTT_PASS;
-#endif
-    seeded = provision.save(BUILD_DEVICE_ID, wifi_ssid, wifi_pass,
-                            BUILD_MQTT_URL, mqtt_user, mqtt_pass);
-#endif
-    if (!seeded) {
-      Serial.println("NVS not provisioned. Send a line over serial:");
-      Serial.println("  PROVISION {\"device_id\":\"bench-01\",\"wifi_ssid\":\"...\",\"wifi_pass\":\"...\",\"mqtt_url\":\"mqtt://192.168.x.x:1883\"}");
-      Serial.println("Waiting...");
-      while (!provision.isComplete()) {
-        provision.pollSerial();
-        delay(50);
-      }
-    }
-  }
-  device_state.initialize();
-  if (!network_manager.begin(provision, device_state.bootId())) {
-    Serial.println("network: bad config"); return;
+  // 3. Load provisioning data from NVS, then initialize Network
+  bool prov_ok = provision.load();
+  Serial.printf("[prov] load complete=%d device_id=%s wifi_ssid=%s mqtt_url=%s\n",
+                prov_ok, provision.deviceId().c_str(),
+                provision.wifiSsid().c_str(), provision.mqttUrl().c_str());
+  if (!prov_ok) {
+    Serial.println("[prov] incomplete — send 'PROVISION {...}' over serial to configure");
   }
 
-  static TelemetryPublisher pub(network_manager, device_state, sensor_manager);
-  static CommandRouter rt(network_manager, device_state);
-  publisher = &pub;
-  router = &rt;
-  router->begin();
+  net_manager.begin(provision, device_state.bootId());
+
+  // 4. Publish initial MQTT Metadata
+  telemetry_publisher.publishMetadata(1);
 }
 
 void loop() {
+  // Allow re-provisioning over serial at any time (e.g. "PROVISION {...}")
   provision.pollSerial();
-  network_manager.loop();
-  if (!network_manager.connected()) { delay(50); return; }
-  if (!meta_published) {
-    publisher->publishMetadata(/*metadata_version=*/3);
-    meta_published = true;
-  }
+
+  // Keep Wi-Fi and MQTT connection active
+  net_manager.loop();
 
   unsigned long now = millis();
-  if (now - last_publish_ms < device_state.sampleIntervalMs()) {
+  if (now - last_print_ms < Config::kDefaultSampleIntervalMs) {
     delay(5);
     return;
   }
-  last_publish_ms = now;
-  publisher->publishOnce();
-}
+  last_print_ms = now;
+
+  // Update sensor readings
+  sensor_manager.update();
+  const TelemetrySample& sample = sensor_manager.sample();
+
+  // Local Serial Print
+  Serial.printf("Current: %.4f A  |  shunt_mV: %.3f  |  raw: %d  |  ads_ok=%d  saturated=%d  |  RPM: %.1f  rpm_ok=%d raw_pulses=%d\n",
+                sample.current_amps, sample.shunt_millivolts,
+                sample.raw_counts, sample.ads_ok, sample.ads_saturated,
+                sample.motor_rpm, sample.rpm_ok, sample.rpm_raw_pulses);
+
+  // Publish structured JSON telemetry to bench/<device_id>/telemetry
+  bool published = telemetry_publisher.publishOnce();
+  if (!published) {
+    Serial.println("[MQTT] Telemetry publish failed or network disconnected");
+  }
+
+  // Also publish a plain-text line to bench/<device_id>/log
+  char log_msg[256];
+  snprintf(log_msg, sizeof(log_msg),
+           "Current: %.4f A  |  shunt_mV: %.3f  |  raw: %d  |  ads_ok=%d  saturated=%d  |  RPM: %.1f  rpm_ok=%d raw_pulses=%d",
+           sample.current_amps, sample.shunt_millivolts,
+           sample.raw_counts, sample.ads_ok, sample.ads_saturated,
+           sample.motor_rpm, sample.rpm_ok, sample.rpm_raw_pulses);
+  net_manager.publishLog(log_msg, strlen(log_msg));
+}    

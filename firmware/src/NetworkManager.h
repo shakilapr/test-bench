@@ -26,7 +26,7 @@ class NetworkManager {
   bool publishStatus(const char* json, size_t len, bool retained);
   bool publishMeta(const char* json, size_t len);
   bool publishAck(const char* json, size_t len);
-
+  bool publishLog(const char* message, size_t len);
   void onCommand(CommandHandler h) { handler_ = h; }
   const String& deviceId() const { return device_id_; }
 
@@ -55,6 +55,7 @@ class NetworkManager {
   String topic_status_;
   String topic_meta_;
   String topic_ack_;
+  String topic_log_;
   String topic_cmd_;
   String client_id_;
   String ap_ssid_;

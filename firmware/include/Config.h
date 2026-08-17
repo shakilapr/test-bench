@@ -4,16 +4,16 @@
 
 namespace Config {
 
-constexpr uint8_t kI2cSdaPin = 21;
-constexpr uint8_t kI2cSclPin = 22;
+constexpr uint8_t kI2cSdaPin = 8;
+constexpr uint8_t kI2cSclPin = 9;
 constexpr uint8_t kAds1115Address = 0x48;
 
-// Motor speed reader (Hall sensor → PCNT). GPIO33 is a safe general-purpose
+// Motor speed reader (Hall sensor → PCNT). GPIO4 is a safe general-purpose
 // pin that does not interfere with bootstrap (unlike GPIO0/2/5/12/15) and
 // has internal pull-up/pull-down support (unlike input-only GPIO34-39).
 //
 // Wiring requirement: motor/controller GND must be common with ESP32 GND,
-// otherwise the level-shifted 3.3 V signal is just floating noise. The
+// otherwise the level-shifted 3.3 V signal is just floating noise. The 
 // signal is routed to the PCNT (Pulse Counter) peripheral so we count
 // edges in hardware — no ISR latency, accurate at high RPM.
 //
@@ -21,7 +21,7 @@ constexpr uint8_t kAds1115Address = 0x48;
 // One magnet on the rotor with one Hall sensor = 1 pulse/rev.
 // kPcntGlitchNs: hardware glitch filter; ignores pulses shorter than this
 // (rejects motor commutation noise / brief sparks).
-constexpr int8_t   kHallPulsePin       = 33;
+constexpr int8_t   kHallPulsePin       = 4;
 constexpr float    kHallPulsesPerRev   = 1.0f;
 constexpr uint16_t kPcntGlitchNs       = 1000;  // 1 µs
 

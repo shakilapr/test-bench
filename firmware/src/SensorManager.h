@@ -16,6 +16,7 @@ struct TelemetrySample {
   bool temp_ok = false;
   float motor_rpm = 0.0f;
   bool rpm_ok = false;
+  int32_t rpm_raw_pulses = 0;
 };
 
 class SensorManager {
