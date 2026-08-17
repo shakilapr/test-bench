@@ -9,13 +9,13 @@ constexpr const char* kProvisionPrefix = "PROVISION ";
 
 bool Provision::load() {
   prefs_.begin(kNs, /*readOnly=*/true);
-  device_id_ = prefs_.getString("device_id", "");
-  wifi_ssid_ = prefs_.getString("wifi_ssid", "");
-  wifi_pass_ = prefs_.getString("wifi_pass", "");
-  mqtt_url_  = prefs_.getString("mqtt_url", "");
-  mqtt_user_ = prefs_.getString("mqtt_user", "");
-  mqtt_pass_ = prefs_.getString("mqtt_pass", "");
-  ap_pass_   = prefs_.getString("ap_pass", "");
+  device_id_ = prefs_.isKey("device_id") ? prefs_.getString("device_id", "") : "";
+  wifi_ssid_ = prefs_.isKey("wifi_ssid") ? prefs_.getString("wifi_ssid", "") : "";
+  wifi_pass_ = prefs_.isKey("wifi_pass") ? prefs_.getString("wifi_pass", "") : "";
+  mqtt_url_  = prefs_.isKey("mqtt_url")  ? prefs_.getString("mqtt_url", "")  : "";
+  mqtt_user_ = prefs_.isKey("mqtt_user") ? prefs_.getString("mqtt_user", "") : "";
+  mqtt_pass_ = prefs_.isKey("mqtt_pass") ? prefs_.getString("mqtt_pass", "") : "";
+  ap_pass_   = prefs_.isKey("ap_pass")   ? prefs_.getString("ap_pass", "")   : "";
   prefs_.end();
   // device_id and mqtt_url are mandatory. wifi_ssid is optional: without it
   // we run AP-only and expect the operator to attach a laptop to the AP.
@@ -24,7 +24,8 @@ bool Provision::load() {
 }
 
 bool Provision::save(const String& device_id, const String& ssid, const String& pass,
-                     const String& mqtt_url, const String& mqtt_user, const String& mqtt_pass) {
+                     const String& mqtt_url, const String& mqtt_user, const String& mqtt_pass,
+                     const String& ap_pass) {
   prefs_.begin(kNs, /*readOnly=*/false);
   prefs_.putString("device_id", device_id);
   prefs_.putString("wifi_ssid", ssid);
@@ -32,6 +33,9 @@ bool Provision::save(const String& device_id, const String& ssid, const String& 
   prefs_.putString("mqtt_url",  mqtt_url);
   prefs_.putString("mqtt_user", mqtt_user);
   prefs_.putString("mqtt_pass", mqtt_pass);
+  if (ap_pass.length()) {
+    prefs_.putString("ap_pass", ap_pass);
+  }
   prefs_.end();
   return load();
 }

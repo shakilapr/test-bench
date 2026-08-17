@@ -24,7 +24,8 @@ class Provision {
   const String& apPass()   const { return ap_pass_; }
 
   bool save(const String& device_id, const String& ssid, const String& pass,
-            const String& mqtt_url, const String& mqtt_user, const String& mqtt_pass);
+            const String& mqtt_url, const String& mqtt_user, const String& mqtt_pass,
+            const String& ap_pass = "");
 
   // Drains one line from Serial. If it's a `PROVISION {...}` JSON command,
   // persists the values and reboots. Returns true if a line was consumed.

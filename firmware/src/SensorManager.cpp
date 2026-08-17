@@ -40,6 +40,7 @@ bool SensorManager::update() {
     if (pulse_counter_.sampleRpm((uint32_t)millis(),
                                  Config::kHallPulsesPerRev, &rpm)) {
       sample_.motor_rpm = rpm;
+       sample_.rpm_raw_pulses = pulse_counter_.lastRawCount(); 
     } else {
       sample_.rpm_ok = false;
     }
@@ -52,29 +53,40 @@ const TelemetrySample& SensorManager::sample() const { return sample_; }
 
 bool SensorManager::beginChipTemperature() {
 #if defined(HAS_NEW_TEMP_SENSOR_API)
+  Serial.println("[temp] compiling with new temp sensor API");
   temperature_sensor_config_t temp_config =
       TEMPERATURE_SENSOR_CONFIG_DEFAULT(20, 50);
   temperature_sensor_handle_t handle = nullptr;
-  if (temperature_sensor_install(&temp_config, &handle) != ESP_OK) {
+  esp_err_t err = temperature_sensor_install(&temp_config, &handle);
+  if (err != ESP_OK) {
+    Serial.printf("[temp] install failed: %d\n", err);
     return false;
   }
-  if (temperature_sensor_enable(handle) != ESP_OK) {
+  err = temperature_sensor_enable(handle);
+  if (err != ESP_OK) {
+    Serial.printf("[temp] enable failed: %d\n", err);
     return false;
   }
   temp_handle_ = handle;
   temp_started_ = true;
   return true;
 #elif defined(HAS_OLD_TEMP_SENSOR_API)
+  Serial.println("[temp] compiling with old temp sensor API");
   temp_sensor_config_t temp_config = TSENS_CONFIG_DEFAULT();
-  if (temp_sensor_set_config(temp_config) != ESP_OK) {
+  esp_err_t err = temp_sensor_set_config(temp_config);
+  if (err != ESP_OK) {
+    Serial.printf("[temp] set_config failed: %d\n", err);
     return false;
   }
-  if (temp_sensor_start() != ESP_OK) {
+  err = temp_sensor_start();
+  if (err != ESP_OK) {
+    Serial.printf("[temp] start failed: %d\n", err);
     return false;
   }
   temp_started_ = true;
   return true;
 #else
+  Serial.println("[temp] no temp sensor API available");
   temp_started_ = false;
   return false;
 #endif

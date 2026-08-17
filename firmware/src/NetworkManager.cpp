@@ -117,6 +117,7 @@ void NetworkManager::buildTopics() {
   topic_status_    = "bench/" + device_id_ + "/status";
   topic_meta_      = "bench/" + device_id_ + "/meta";
   topic_ack_       = "bench/" + device_id_ + "/ack";
+  topic_log_       = "bench/" + device_id_ + "/log";
   topic_cmd_       = "bench/" + device_id_ + "/cmd";
 }
 
@@ -148,11 +149,24 @@ bool NetworkManager::ensureWifi() {
     return false;
   }
   if (WiFi.status() == WL_CONNECTED) {
+    if (wifi_backoff_ms_ > 0 || wifi_next_attempt_ms_ > 0) {
+      Serial.println("[net] wifi connected");
+    }
     wifi_backoff_ms_ = 0;
+    wifi_next_attempt_ms_ = 0;
     return true;
   }
   uint32_t now = millis();
+  if (wifi_next_attempt_ms_ == 0) {
+    wifi_backoff_ms_ = Config::kReconnectInitialDelayMs;
+    wifi_next_attempt_ms_ = now + 5000; // Wait 5s for initial connection
+    Serial.println("[net] wifi starting connection (waiting 5s)...");
+    WiFi.disconnect(true, false);
+    WiFi.begin(wifi_ssid_.c_str(), wifi_pass_.c_str());
+    return false;
+  }
   if (now < wifi_next_attempt_ms_) return false;
+
   wifi_backoff_ms_ = nextBackoff(wifi_backoff_ms_);
   wifi_next_attempt_ms_ = now + wifi_backoff_ms_;
   Serial.printf("[net] wifi reconnecting (next attempt in %ums)\n", wifi_backoff_ms_);
@@ -241,11 +255,15 @@ bool NetworkManager::publishMeta(const char* json, size_t len) {
   if (!mqtt_.connected()) return false;
   return mqtt_.publish(topic_meta_.c_str(), (const uint8_t*)json, len, true);
 }
+
 bool NetworkManager::publishAck(const char* json, size_t len) {
   if (!mqtt_.connected()) return false;
   return mqtt_.publish(topic_ack_.c_str(), (const uint8_t*)json, len, false);
 }
-
+bool NetworkManager::publishLog(const char* message, size_t len) {
+  if (!mqtt_.connected()) return false;
+  return mqtt_.publish(topic_log_.c_str(), (const uint8_t*)message, len, false);
+}
 void NetworkManager::staticOnMessage(char* topic, uint8_t* payload, unsigned int len) {
   if (!g_self || !g_self->handler_) return;
   g_self->handler_(topic, payload, len);

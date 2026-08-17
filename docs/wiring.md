@@ -37,3 +37,4 @@ current_amps = (measured_mV / 75 mV) × 200 A
 - Avoid `GPIO0`, `GPIO3`, `GPIO19`, `GPIO20`, `GPIO43`–`GPIO46` for expansion (boot-strapping and USB/UART).
 - At boot the firmware scans the I2C bus and logs every responding address as `[i2c] device at 0xNN`. If you don't see `0x48`, recheck SDA/SCL/VDD/GND before suspecting code.
 - Update this file when adding a new peripheral.
+   
